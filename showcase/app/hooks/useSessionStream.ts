@@ -17,6 +17,7 @@ export interface LiveEventRow {
   tool: string;
   source: string;
   tokenDelta: number;
+  budgetUsed?: number;
   budgetRemaining: number;
   decisionLog: string;
   args?: Record<string, unknown>;
@@ -268,6 +269,7 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
           tool: toolLabel(tool),
           source: testimony.specialist_name,
           tokenDelta: testimony.token_count,
+          budgetUsed: event.budget_used,
           budgetRemaining: event.budget_remaining ?? budgetRemaining,
           decisionLog: decisionLogFor(event),
           args: event.args,
@@ -287,6 +289,7 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
           tool: toolLabel(tool),
           source: "speaker",
           tokenDelta: 0,
+          budgetUsed: event.budget_used,
           budgetRemaining: event.budget_remaining ?? budgetRemaining,
           decisionLog: decisionLogFor(event),
           args: event.args,
@@ -304,6 +307,7 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
         tool: toolLabel(tool),
         source: "—",
         tokenDelta: 0,
+        budgetUsed: event.budget_used,
         budgetRemaining: event.budget_remaining ?? budgetRemaining,
         decisionLog: decisionLogFor(event),
         args: event.args,

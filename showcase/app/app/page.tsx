@@ -75,10 +75,53 @@ function liveRowToEvent(row: LiveEventRow): TimelineEvent {
     ok: true,
     message: row.decisionLog,
     args: row.args,
+    budget_used: row.budgetUsed,
     budget_remaining: row.budgetRemaining,
     testimony_added: row.testimony,
     verdict: row.verdict,
   };
+}
+
+function liveAgentPrompt(
+  phase: string,
+  liveEvents: LiveEventRow[],
+  activeEvent: TimelineEvent | undefined,
+  world: ReplayBundle["world"] | undefined,
+): string {
+  if (phase === "running" && liveEvents.length === 0) {
+    return "Speaker is deliberating — first tool call in progress (typically 10–30s)…";
+  }
+  const last = liveEvents.at(-1);
+  if (phase === "running" && last) {
+    if (last.testimony) {
+      const question =
+        last.question ??
+        (typeof last.args?.question === "string" ? last.args.question : undefined);
+      if (question) {
+        return `Main agent cross-examining ${last.testimony.specialist_name}: ${question}`;
+      }
+      return `Main agent recorded floor testimony from ${last.testimony.specialist_name}.`;
+    }
+    if (last.verdict) {
+      return `Main agent submitted verdict: ${compact(last.verdict.decision)}.`;
+    }
+    return `Running ${last.tool.replace(/_/g, " ")} — planning next move…`;
+  }
+  return promptFor(activeEvent, world);
+}
+
+function resolveVisibleTestimony(
+  visibleEvents: TimelineEvent[],
+  liveMode: boolean,
+  liveEvents: LiveEventRow[],
+): TestimonyVisible[] {
+  const fromTimeline = visibleEvents
+    .map((event) => event.testimony_added)
+    .filter((item): item is TestimonyVisible => Boolean(item));
+  if (fromTimeline.length > 0 || !liveMode) return fromTimeline;
+  return liveEvents
+    .filter((row) => row.testimony)
+    .map((row) => row.testimony!);
 }
 
 function liveTimelineEvents(bundle: ReplayBundle, liveEvents: LiveEventRow[]): TimelineEvent[] {
@@ -353,7 +396,7 @@ function ParallelInterrogation({
                 <span>{source.name}</span>
                 <em>{state}</em>
               </div>
-              <p>{block?.question ?? source.public_bid}</p>
+              <p>{block?.visible_text ?? block?.question ?? source.public_bid}</p>
               <div className="cvp-subagent-footer">
                 <span>{document.id}</span>
                 <span>{block ? `${block.token_count}t returned` : `${source.requested_tokens}t bid`}</span>
@@ -383,7 +426,7 @@ function ParallelInterrogation({
               <article className={`cvp-doc-card ${state}`} data-state={state} key={source.id}>
                 <span>{document.id}</span>
                 <strong>{document.label}</strong>
-                <p>{document.detail}</p>
+                <p>{block?.visible_text ?? document.detail}</p>
               </article>
             );
           })}
@@ -568,10 +611,12 @@ function RecordTable({
   testimony,
   citationIds,
   audit,
+  emptyMessage = "No testimony has entered the official record yet.",
 }: {
   testimony: TestimonyVisible[];
   citationIds: string[];
   audit: boolean;
+  emptyMessage?: string;
 }) {
   const citations = new Set(citationIds);
   return (
@@ -589,7 +634,7 @@ function RecordTable({
         <tbody>
           {testimony.length === 0 && (
             <tr className="cvp-empty-row">
-              <td colSpan={5}>No testimony has entered the official record yet.</td>
+              <td colSpan={5}>{emptyMessage}</td>
             </tr>
           )}
           {testimony.map((block) => (
@@ -625,12 +670,14 @@ function SpeakerRightPanel({
   currentEvent,
   typedPrompt,
   playback,
+  liveDeliberating = false,
 }: {
   events: TimelineEvent[];
   verdict: NonNullable<TimelineEvent["verdict"]> | null;
   currentEvent: TimelineEvent | undefined;
   typedPrompt: string;
   playback: PlaybackState;
+  liveDeliberating?: boolean;
 }) {
   const activity = events
     .filter((event) => event.type === "tool_call")
@@ -657,7 +704,11 @@ function SpeakerRightPanel({
         ) : (
           <>
             <div className="cvp-output-decision">
-              {playback === "complete" ? "Ready To Replay" : "Gathering Evidence"}
+              {playback === "complete"
+                ? "Ready To Replay"
+                : liveDeliberating
+                  ? "Deliberating"
+                  : "Gathering Evidence"}
             </div>
             <p>{typedPrompt}</p>
             <div className="cvp-citation-row">
@@ -823,18 +874,28 @@ export default function Page() {
     liveMode || playhead == null
       ? allEvents
       : allEvents.filter((event) => event.index <= playhead);
-  const visibleTestimony = visibleEvents
-    .map((event) => event.testimony_added)
-    .filter((item): item is TestimonyVisible => Boolean(item));
+  const visibleTestimony = resolveVisibleTestimony(
+    visibleEvents,
+    liveMode,
+    session.liveEvents,
+  );
+  const hasRecordTokens = visibleTestimony.length > 0;
   const visibleVerdict = replayVerdict(visibleEvents);
-  const activeEvent =
-    playhead == null ? undefined : allEvents.find((event) => event.index === playhead);
+  const activeEvent = liveMode
+    ? ([...allEvents].reverse().find((event) => event.testimony_added || event.verdict) ??
+      allEvents.at(-1))
+    : playhead == null
+      ? undefined
+      : allEvents.find((event) => event.index === playhead);
   const activeSpecialistId =
     liveMode && session.activeSpecialistId
       ? session.activeSpecialistId
       : (activeEvent?.testimony_added?.specialist_id ?? null);
-  const currentPrompt = promptFor(activeEvent, bundle?.world);
-  const typedPrompt = useTypewriter(currentPrompt, playback === "running");
+  const agentPrompt = liveMode
+    ? liveAgentPrompt(session.phase, session.liveEvents, activeEvent, bundle?.world)
+    : promptFor(activeEvent, bundle?.world);
+  const typedReplayPrompt = useTypewriter(agentPrompt, playback === "running" && !liveMode);
+  const displayPrompt = liveMode ? agentPrompt : typedReplayPrompt;
   const specialists = liveMode
     ? session.specialists
     : (bundle?.timeline[0]?.payload?.specialists ?? []);
@@ -843,12 +904,22 @@ export default function Page() {
     .reverse()
     .find((event) => event.budget_used !== undefined);
   const budgetUsed = liveMode
-    ? session.budgetUsed
+    ? hasRecordTokens
+      ? session.budgetUsed
+      : 0
     : Number(lastBudgetEvent?.budget_used ?? 0);
-  const budgetTotal = bundle?.world.token_budget ?? 1;
+  const budgetTotal = bundle?.world.token_budget ?? 500;
+  const budgetRemaining = liveMode
+    ? hasRecordTokens
+      ? session.budgetRemaining
+      : budgetTotal
+    : Math.max(0, budgetTotal - budgetUsed);
   const interactions = liveMode
-    ? session.interactionsUsed
+    ? hasRecordTokens
+      ? session.interactionsUsed
+      : 0
     : visibleEvents.filter((event) => event.testimony_added).length;
+  const liveDeliberating = liveMode && session.phase === "running" && !hasRecordTokens;
   const replayLabel = liveMode
     ? session.phase === "running"
       ? "RUNNING…"
@@ -864,21 +935,31 @@ export default function Page() {
       icon: GLYPH.source,
       label: "EVIDENCE INPUTS",
       value: String(specialists.length),
-      status: playback === "running" ? "cards open" : "public cards",
+      status: liveDeliberating ? "opening cards" : playback === "running" ? "cards open" : "public cards",
       tone: "green" as Tone,
     },
     {
       icon: GLYPH.record,
       label: "RECORD TOKENS",
-      value: `${budgetUsed}/${budgetTotal}`,
-      status: `${budgetTotal - budgetUsed} left`,
+      value: hasRecordTokens
+        ? `${budgetUsed}/${budgetTotal}`
+        : liveDeliberating
+          ? "Interviewing"
+          : "—",
+      status: hasRecordTokens
+        ? `${budgetRemaining} left`
+        : liveDeliberating
+          ? "awaiting testimony"
+          : "not started",
       tone: "blue" as Tone,
     },
     {
       icon: GLYPH.timeline,
       label: "INTERROGATIONS",
-      value: String(interactions),
-      status: `${bundle?.world.max_interactions ?? 0} max`,
+      value: hasRecordTokens || !liveMode ? String(interactions) : liveDeliberating ? "Asking" : "—",
+      status: liveDeliberating
+        ? "speaker planning"
+        : `${bundle?.world.max_interactions ?? 0} max`,
       tone: "yellow" as Tone,
     },
     {
@@ -888,7 +969,9 @@ export default function Page() {
       status: visibleVerdict
         ? `${Math.round(visibleVerdict.confidence * 100)}% confidence`
         : playback === "running"
-          ? "synthesizing"
+          ? liveDeliberating
+            ? "deliberating"
+            : "synthesizing"
           : "ready",
       tone: visibleVerdict ? "green" as Tone : "neutral" as Tone,
     },
@@ -1019,7 +1102,7 @@ export default function Page() {
               <>
                 <AgentFlow
                   event={activeEvent}
-                  typedPrompt={typedPrompt}
+                  typedPrompt={displayPrompt}
                   playback={playback}
                 />
                 <ParallelInterrogation
@@ -1049,7 +1132,16 @@ export default function Page() {
               <span className="cvp-filter">{mode === "speaker" ? "PUBLIC" : "AUDIT"}</span>
             </div>
           </div>
-          <RecordTable testimony={visibleTestimony} citationIds={citationIds} audit={mode === "audit"} />
+          <RecordTable
+            testimony={visibleTestimony}
+            citationIds={citationIds}
+            audit={mode === "audit"}
+            emptyMessage={
+              liveDeliberating
+                ? "Speaker is interviewing specialists — testimony will appear here once generated."
+                : "No testimony has entered the official record yet."
+            }
+          />
         </section>
       </section>
 
@@ -1061,8 +1153,9 @@ export default function Page() {
               events={visibleEvents}
               verdict={visibleVerdict}
               currentEvent={activeEvent}
-              typedPrompt={typedPrompt}
+              typedPrompt={displayPrompt}
               playback={playback}
+              liveDeliberating={liveDeliberating}
             />
           ) : (
             <AuditRightPanel bundle={bundle} />
