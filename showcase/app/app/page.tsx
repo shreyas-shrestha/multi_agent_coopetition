@@ -323,10 +323,12 @@ function AgentFlow({
   event,
   typedPrompt,
   playback,
+  settled = false,
 }: {
   event: TimelineEvent | undefined;
   typedPrompt: string;
   playback: PlaybackState;
+  settled?: boolean;
 }) {
   const testimony = event?.testimony_added;
   const verdict = event?.verdict;
@@ -334,11 +336,13 @@ function AgentFlow({
     ? "Verdict"
     : testimony?.specialist_name ?? (event?.type === "session_start" ? "Roster" : "Record");
   const status =
-    playback === "running"
-      ? "streaming"
-      : playback === "paused"
-        ? "paused"
-        : "complete";
+    settled || playback === "complete"
+      ? "complete"
+      : playback === "running"
+        ? "streaming"
+        : playback === "paused"
+          ? "paused"
+          : "complete";
 
   return (
     <section className={`cvp-agent-flow cvp-agent-flow-${status}`} data-testid="agent-flow">
@@ -355,7 +359,7 @@ function AgentFlow({
       </div>
       <p>
         {typedPrompt}
-        {playback === "running" && <b aria-hidden="true" />}
+        {playback === "running" && !settled && <b aria-hidden="true" />}
       </p>
     </section>
   );
@@ -367,12 +371,14 @@ function ParallelInterrogation({
   activeId,
   playback,
   world,
+  settled = false,
 }: {
   specialists: SpecialistCard[];
   testimony: TestimonyVisible[];
   activeId: string | null;
   playback: PlaybackState;
   world: ReplayBundle["world"];
+  settled?: boolean;
 }) {
   const sampled = useMemo(() => sampledBySource(testimony), [testimony]);
   const latest = useMemo(() => latestBySource(testimony), [testimony]);
@@ -382,20 +388,20 @@ function ParallelInterrogation({
       Math.max(source.requested_tokens, sampled[source.id]?.tokens ?? 0),
     ),
   );
-  const activeTraversal = playback === "running" || playback === "paused";
+  const activeTraversal = !settled && (playback === "running" || playback === "paused");
 
   return (
     <section className="cvp-parallel-panel">
       <div className="cvp-parallel-head">
         <h3>{GLYPH.timeline} INTERROGATION TIMELINE</h3>
-        <span>{activeTraversal ? "parallel traversal" : "replay trace"}</span>
+        <span>{settled ? "hearing complete" : activeTraversal ? "parallel traversal" : "replay trace"}</span>
       </div>
 
       <div className="cvp-subagent-grid" data-testid="subagent-grid">
         {specialists.map((source, index) => {
           const block = latest[source.id];
           const pulled = sampled[source.id]?.tokens ?? 0;
-          const active = activeId === source.id;
+          const active = !settled && activeId === source.id;
           const state = active
             ? "reporting"
             : block
@@ -433,7 +439,7 @@ function ParallelInterrogation({
         <div className="cvp-doc-grid">
           {specialists.map((source, index) => {
             const block = latest[source.id];
-            const active = activeId === source.id;
+            const active = !settled && activeId === source.id;
             const state = active ? "active" : block ? "visited" : activeTraversal ? "scanning" : "idle";
             const document = documentForSource(source, index, world.domain);
 
@@ -944,6 +950,7 @@ export default function Page() {
       : 0
     : visibleEvents.filter((event) => event.testimony_added).length;
   const liveDeliberating = liveMode && session.phase === "running" && !hasRecordTokens;
+  const hearingSettled = Boolean(visibleVerdict) || (liveMode && session.phase === "complete");
   const replayLabel = liveMode
     ? session.phase === "running"
       ? "RUNNING…"
@@ -1130,6 +1137,7 @@ export default function Page() {
                   event={activeEvent}
                   typedPrompt={displayPrompt}
                   playback={playback}
+                  settled={hearingSettled}
                 />
                 <ParallelInterrogation
                   specialists={specialists}
@@ -1137,6 +1145,7 @@ export default function Page() {
                   activeId={activeSpecialistId}
                   playback={playback}
                   world={bundle.world}
+                  settled={hearingSettled}
                 />
               </>
             ) : (
