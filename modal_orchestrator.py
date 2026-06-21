@@ -42,8 +42,21 @@ def _configure_runtime() -> None:
 @app.function(
     image=image,
     secrets=[modal.Secret.from_name(HUD_SECRET, required_keys=["HUD_API_KEY", "ANTHROPIC_API_KEY"])],
+    timeout=60,
+)
+def secret_check() -> dict[str, bool]:
+    return {
+        "hud_configured": bool(os.environ.get("HUD_API_KEY")),
+        "anthropic_configured": bool(os.environ.get("ANTHROPIC_API_KEY")),
+    }
+
+
+@app.function(
+    image=image,
+    secrets=[modal.Secret.from_name(HUD_SECRET, required_keys=["HUD_API_KEY", "ANTHROPIC_API_KEY"])],
     timeout=900,
-    scaledown_window=600,
+    scaledown_window=3600,
+    min_containers=1,
     max_containers=4,
 )
 @modal.concurrent(max_inputs=8)
@@ -70,11 +83,13 @@ def web() -> Any:
     )
 
     @api.get("/health")
-    async def health() -> dict[str, str]:
+    async def health() -> dict[str, str | bool]:
         return {
             "status": "ok",
             "speaker_model": TRAINED_MODEL,
             "specialist_model": os.environ.get("PARLIAMENT_ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
+            "hud_configured": bool(os.environ.get("HUD_API_KEY")),
+            "anthropic_configured": bool(os.environ.get("ANTHROPIC_API_KEY")),
         }
 
     @api.get("/api/worlds/{world_id}/preview")
@@ -103,7 +118,7 @@ def web() -> Any:
             try:
                 await run_live_hearing(world_id, emit, max_steps=max_steps)
             except Exception as exc:  # noqa: BLE001 - surface to client stream
-                await queue.put({"type": "error", "message": str(exc)})
+                await queue.put({"type": "hearing_error", "message": str(exc)})
             finally:
                 await queue.put(None)
 
@@ -111,6 +126,8 @@ def web() -> Any:
 
         async def event_source():
             yield f"event: meta\ndata: {json.dumps({'speaker_model': SPEAKER_MODEL, 'world_id': world_id})}\n\n"
+            yield f"event: ping\ndata: {json.dumps({'status': 'started'})}\n\n"
+            await asyncio.sleep(0)
             while True:
                 item = await queue.get()
                 if item is None:
@@ -118,8 +135,8 @@ def web() -> Any:
                 raw_type = str(item.get("type", "timeline"))
                 if raw_type == "complete":
                     sse_type = "complete"
-                elif raw_type == "error":
-                    sse_type = "error"
+                elif raw_type == "hearing_error":
+                    sse_type = "hearing_error"
                 else:
                     sse_type = "timeline"
                 yield f"event: {sse_type}\ndata: {json.dumps(item)}\n\n"

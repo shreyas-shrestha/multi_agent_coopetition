@@ -13,6 +13,12 @@ export function orchestratorBaseUrl(): string {
 export async function loadLivePreview(worldId: string): Promise<ReplayBundle> {
   const base = orchestratorBaseUrl();
   if (!base) throw new Error("NEXT_PUBLIC_ORCHESTRATOR_URL is not configured");
+  // Warm the Modal container before the heavier preview + hearing stream.
+  try {
+    await fetch(`${base}/health`, { cache: "no-store" });
+  } catch {
+    // Non-fatal: preview may still succeed and wake the container.
+  }
   const response = await fetch(`${base}/api/worlds/${encodeURIComponent(worldId)}/preview`);
   if (!response.ok) {
     throw new Error(`Live preview failed (${response.status})`);
@@ -60,6 +66,16 @@ export function openLiveHearingStream(
       handlers.onError(error instanceof Error ? error.message : "Malformed completion event");
       source.close();
     }
+  });
+
+  source.addEventListener("hearing_error", (message) => {
+    try {
+      const payload = JSON.parse((message as MessageEvent<string>).data) as { message?: string };
+      handlers.onError(payload.message ?? "Live hearing failed");
+    } catch {
+      handlers.onError("Live hearing failed");
+    }
+    source.close();
   });
 
   source.addEventListener("error", (message) => {

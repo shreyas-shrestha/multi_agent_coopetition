@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
@@ -29,10 +30,29 @@ from tasks import _built_tasks
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EventCallback = Callable[[dict[str, Any]], Awaitable[None] | None]
 
+# Live demo: skip training-only gateway flags and cap generation length for latency.
+LIVE_COMPLETION_KWARGS = {
+    "tool_choice": "required",
+    "max_tokens": 512,
+    "temperature": 0.4,
+    "extra_body": {
+        "chat_template_kwargs": {"enable_thinking": False},
+    },
+}
+
 
 def _configure_specialists() -> None:
     os.environ.setdefault("PARLIAMENT_SPECIALIST_BACKEND", "llm")
     os.environ.setdefault("PARLIAMENT_ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
+
+
+def _require_hud_api_key() -> None:
+    if not os.environ.get("HUD_API_KEY"):
+        raise RuntimeError(
+            "HUD_API_KEY is not configured on the Modal orchestrator. "
+            "Run: modal secret create context-window-parliament-hud "
+            "HUD_API_KEY=$HUD_API_KEY ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY --force"
+        )
 
 
 def _task_for_world(world_id: str) -> Any:
@@ -74,9 +94,11 @@ async def run_live_hearing(
     max_steps: int = 100,
 ) -> dict[str, Any]:
     _configure_specialists()
+    _require_hud_api_key()
     preview = make_preview(world_id)
     specialists = preview["timeline"][0]["payload"]["specialists"]
     specialists_by_id = {str(item["id"]): item for item in specialists}
+    started = time.perf_counter()
     await _emit(on_event, preview["timeline"][0])
 
     interactions_used = 0
@@ -84,6 +106,7 @@ async def run_live_hearing(
 
     async def handle_tool(index: int, call: MCPToolCall, result: MCPToolResult) -> None:
         nonlocal interactions_used, last_view
+        elapsed = time.perf_counter() - started
         event, interactions_used = event_from_tool_call(
             index=index,
             tool_name=call.name,
@@ -92,26 +115,18 @@ async def run_live_hearing(
             specialists_by_id=specialists_by_id,
             interactions_used=interactions_used,
         )
+        event["elapsed_s"] = round(elapsed, 2)
         if event["tool"] == "view_record" and event.get("ok"):
             from parliament.live_timeline import _parse_tool_payload
 
             last_view = _parse_tool_payload(result)
         await _emit(on_event, event)
 
-    completion_kwargs = {
-        "tool_choice": "required",
-        "max_tokens": 2048,
-        "temperature": 0.7,
-        "extra_body": {
-            "return_token_ids": True,
-            "chat_template_kwargs": {"enable_thinking": False},
-        },
-    }
     agent = StreamingOpenAIChatAgent(
         OpenAIChatConfig(
             model=SPEAKER_MODEL,
             max_steps=max_steps,
-            completion_kwargs=completion_kwargs,
+            completion_kwargs=LIVE_COMPLETION_KWARGS,
         ),
         on_tool_complete=handle_tool,
     )
@@ -127,6 +142,7 @@ async def run_live_hearing(
             **preview["meta"],
             "trace_id": run.trace_id,
             "job_id": run.job_id,
+            "elapsed_s": round(time.perf_counter() - started, 2),
         },
         "reward": reward_block,
         "final_record": final_record,

@@ -193,6 +193,19 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
     };
 
     const runTransfer = async (testimony: NonNullable<TimelineEvent["testimony_added"]>) => {
+      if (liveMode) {
+        setSampledMap((prev) => {
+          const cur = prev[testimony.specialist_id] ?? { tokens: 0, count: 0 };
+          return {
+            ...prev,
+            [testimony.specialist_id]: {
+              tokens: cur.tokens + testimony.token_count,
+              count: cur.count + 1,
+            },
+          };
+        });
+        return;
+      }
       setActiveSpecialistId(testimony.specialist_id);
       setTransfer({
         specialistId: testimony.specialist_id,
@@ -226,6 +239,10 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
 
       if (event.type === "session_start") {
         const roster = event.payload?.specialists ?? [];
+        if (liveMode) {
+          setVisibleSpecialistIds(roster.map((item) => item.id));
+          return;
+        }
         for (let i = 0; i < roster.length; i++) {
           await sleep(40 + i * 48, signal);
           setVisibleSpecialistIds((ids) => [...ids, roster[i].id]);
@@ -259,7 +276,7 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
           flash: true,
         });
         applyBudget(event);
-        await sleep(220 + jitter(), signal);
+        if (!liveMode) await sleep(220 + jitter(), signal);
         return;
       }
 
@@ -277,7 +294,7 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
           flash: true,
         });
         applyBudget(event);
-        await sleep(400 + jitter(), signal);
+        if (!liveMode) await sleep(400 + jitter(), signal);
         return;
       }
 
@@ -293,7 +310,7 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
         flash: true,
       });
       applyBudget(event);
-      await sleep(160 + jitter(30, 90), signal);
+      if (!liveMode) await sleep(160 + jitter(30, 90), signal);
     };
 
     const runReplay = async () => {
@@ -345,7 +362,7 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
       while (!signal.aborted && !streamDoneRef.current) {
         const pending = liveTimelineRef.current.slice(cursor);
         if (pending.length === 0) {
-          await sleep(150, signal);
+          await sleep(liveMode ? 50 : 150, signal);
           continue;
         }
         for (const event of pending) {
