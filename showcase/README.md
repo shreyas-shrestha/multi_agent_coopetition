@@ -24,19 +24,12 @@ Grayed **Install Command** / **Build Command** in the Vercel dashboard is normal
 4. **Settings → Build & Development Settings** → turn **off** overrides for Install, Build, and Output Directory.
 5. Redeploy from latest `main`.
 
-Vercel will read `showcase/app/vercel.json`:
+Vercel reads `showcase/app/vercel.json` (edit that file and push to change grayed commands):
 
 - Install: `cd .. && npm ci`
 - Build: `npm run build`
 
-### If Root Directory is empty (repo root)
-
-Vercel reads the repo-root `vercel.json` instead:
-
-- Install: `npm ci --prefix showcase`
-- Build: `npm run build --prefix showcase`
-
-Use **one** root-directory mode. If commands look stuck after changing Root Directory, **disconnect and re-import** the GitHub repo or trigger a fresh production deploy from the latest commit.
+If commands still show `npm ci --prefix showcase`, Root Directory is still set to the repo root — change it to `showcase/app` and redeploy. If settings stay stuck, disconnect and re-import the GitHub repo.
 
 No environment variables are needed for the replay-only showcase.
 
