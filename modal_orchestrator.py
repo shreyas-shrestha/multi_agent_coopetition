@@ -24,12 +24,12 @@ image = (
         "fastapi[standard]==0.115.6",
         "anthropic>=0.40",
     )
-    .add_local_dir(ROOT / "parliament", f"{REMOTE_ROOT}/parliament")
-    .add_local_dir(ROOT / "controller", f"{REMOTE_ROOT}/controller")
-    .add_local_dir(ROOT / "environment", f"{REMOTE_ROOT}/environment")
-    .add_local_file(ROOT / "env.py", f"{REMOTE_ROOT}/env.py")
-    .add_local_file(ROOT / "tasks.py", f"{REMOTE_ROOT}/tasks.py")
-    .add_local_file(ROOT / ".hud_eval.toml", f"{REMOTE_ROOT}/.hud_eval.toml")
+    .add_local_dir(ROOT / "parliament", f"{REMOTE_ROOT}/parliament", copy=True)
+    .add_local_dir(ROOT / "controller", f"{REMOTE_ROOT}/controller", copy=True)
+    .add_local_dir(ROOT / "environment", f"{REMOTE_ROOT}/environment", copy=True)
+    .add_local_file(ROOT / "env.py", f"{REMOTE_ROOT}/env.py", copy=True)
+    .add_local_file(ROOT / "tasks.py", f"{REMOTE_ROOT}/tasks.py", copy=True)
+    .add_local_file(ROOT / ".hud_eval.toml", f"{REMOTE_ROOT}/.hud_eval.toml", copy=True)
     .workdir(REMOTE_ROOT)
 )
 
