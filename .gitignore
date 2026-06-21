@@ -6,4 +6,5 @@ __pycache__/
 .ruff_cache/
 pytest-cache-files-*/
 skills-lock.json
+.hud_eval.local.toml
 

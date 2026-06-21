@@ -1,0 +1,47 @@
+{
+  "model_slug": "parliament-qwen4b-hackathon",
+  "model_id": "6d6011a5-27dd-4a70-b0a7-f1778658b3d0",
+  "model_url": "https://hud.ai/models/6d6011a5-27dd-4a70-b0a7-f1778658b3d0",
+  "base_model": "Qwen/Qwen3.5-4B",
+  "notes": "Sampler weights are hosted on HUD/Tinker; eval with -m parliament-qwen4b-hackathon --gateway serves the active checkpoint head.",
+  "training_config": {
+    "loss_fn": "importance_sampling",
+    "group_size": 8,
+    "learning_rate": 1e-5,
+    "eval_requires_return_token_ids": true
+  },
+  "checkpoints": [
+    {
+      "name": "step-000001",
+      "id": "f9212862-4da5-47e4-bebc-5feef3b01327",
+      "is_active": false,
+      "created_at": "2026-06-21T03:09:18.213886Z",
+      "num_traces": 24,
+      "num_tokens": 58927,
+      "mean_reward": 0.615644,
+      "training_jobs": [
+        "6ca3e544-806a-4a8e-a28f-7411fc36c2ea",
+        "882b434a-43d7-4dfe-9ca4-946188d1e67e"
+      ]
+    },
+    {
+      "name": "step-000002",
+      "id": "45b7be05-9d4a-411b-a1fe-511d31274bc8",
+      "is_active": true,
+      "created_at": "2026-06-21T04:53:51.057840Z",
+      "num_traces": 160,
+      "num_tokens": 310634,
+      "mean_reward": 0.635029,
+      "training_jobs": ["3fb30532-aad9-463b-878f-7527bd1950a2"]
+    }
+  ],
+  "eval_jobs": {
+    "baseline_20_tasks": {
+      "id": "3fb30532-aad9-463b-878f-7527bd1950a2",
+      "tasks": 20,
+      "group_size": 8,
+      "rollouts": 160,
+      "mean_reward": 0.635
+    }
+  }
+}
