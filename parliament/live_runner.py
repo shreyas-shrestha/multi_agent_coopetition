@@ -103,9 +103,10 @@ async def run_live_hearing(
 
     interactions_used = 0
     last_view: dict[str, Any] | None = None
+    last_verdict: dict[str, Any] | None = None
 
     async def handle_tool(index: int, call: MCPToolCall, result: MCPToolResult) -> None:
-        nonlocal interactions_used, last_view
+        nonlocal interactions_used, last_view, last_verdict
         elapsed = time.perf_counter() - started
         event, interactions_used = event_from_tool_call(
             index=index,
@@ -120,6 +121,8 @@ async def run_live_hearing(
             from parliament.live_timeline import _parse_tool_payload
 
             last_view = _parse_tool_payload(result)
+        if event.get("verdict"):
+            last_verdict = event["verdict"]
         await _emit(on_event, event)
 
     agent = StreamingOpenAIChatAgent(
@@ -146,6 +149,7 @@ async def run_live_hearing(
         },
         "reward": reward_block,
         "final_record": final_record,
+        "verdict": last_verdict,
         "status": run.trace.status or "completed",
     }
     await _emit(on_event, complete)

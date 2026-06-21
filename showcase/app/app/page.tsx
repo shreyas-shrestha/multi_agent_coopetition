@@ -67,6 +67,20 @@ function replayVerdict(events: TimelineEvent[]) {
   return events.find((event) => event.verdict)?.verdict ?? null;
 }
 
+function resolveVisibleVerdict(
+  visibleEvents: TimelineEvent[],
+  liveMode: boolean,
+  liveEvents: LiveEventRow[],
+  bundleVerdict?: NonNullable<TimelineEvent["verdict"]> | null,
+): NonNullable<TimelineEvent["verdict"]> | null {
+  const fromTimeline = replayVerdict(visibleEvents);
+  if (fromTimeline) return fromTimeline;
+  if (!liveMode) return null;
+  const fromRows = liveEvents.findLast((row) => row.verdict)?.verdict;
+  if (fromRows) return fromRows;
+  return bundleVerdict ?? null;
+}
+
 function liveRowToEvent(row: LiveEventRow): TimelineEvent {
   const toolKey = row.tool.replace(/ /g, "_").toLowerCase();
   return {
@@ -672,6 +686,7 @@ function SpeakerRightPanel({
   typedPrompt,
   playback,
   liveDeliberating = false,
+  hearingComplete = false,
 }: {
   events: TimelineEvent[];
   verdict: NonNullable<TimelineEvent["verdict"]> | null;
@@ -679,6 +694,7 @@ function SpeakerRightPanel({
   typedPrompt: string;
   playback: PlaybackState;
   liveDeliberating?: boolean;
+  hearingComplete?: boolean;
 }) {
   const activity = events
     .filter((event) => event.type === "tool_call")
@@ -705,11 +721,13 @@ function SpeakerRightPanel({
         ) : (
           <>
             <div className="cvp-output-decision">
-              {playback === "complete"
-                ? "Ready To Replay"
-                : liveDeliberating
-                  ? "Deliberating"
-                  : "Gathering Evidence"}
+              {hearingComplete
+                ? "Hearing Complete"
+                : playback === "complete"
+                  ? "Ready To Replay"
+                  : liveDeliberating
+                    ? "Deliberating"
+                    : "Gathering Evidence"}
             </div>
             <p>{typedPrompt}</p>
             <div className="cvp-citation-row">
@@ -881,7 +899,12 @@ export default function Page() {
     session.liveEvents,
   );
   const hasRecordTokens = visibleTestimony.length > 0;
-  const visibleVerdict = replayVerdict(visibleEvents);
+  const visibleVerdict = resolveVisibleVerdict(
+    visibleEvents,
+    liveMode,
+    session.liveEvents,
+    bundle?.verdict,
+  );
   const activeEvent = liveMode
     ? ([...allEvents].reverse().find((event) => event.testimony_added || event.verdict) ??
       allEvents.at(-1))
@@ -969,11 +992,13 @@ export default function Page() {
       value: visibleVerdict ? shortOption(visibleVerdict.decision) : "Pending",
       status: visibleVerdict
         ? `${Math.round(visibleVerdict.confidence * 100)}% confidence`
-        : playback === "running"
-          ? liveDeliberating
-            ? "deliberating"
-            : "synthesizing"
-          : "ready",
+        : liveMode && session.phase === "complete"
+          ? `score ${bundle?.reward.reward.toFixed(2) ?? "—"}`
+          : playback === "running"
+            ? liveDeliberating
+              ? "deliberating"
+              : "synthesizing"
+            : "ready",
       tone: visibleVerdict ? "green" as Tone : "neutral" as Tone,
     },
   ];
@@ -1157,6 +1182,7 @@ export default function Page() {
               typedPrompt={displayPrompt}
               playback={playback}
               liveDeliberating={liveDeliberating}
+              hearingComplete={liveMode && session.phase === "complete" && !visibleVerdict}
             />
           ) : (
             <AuditRightPanel bundle={bundle} />

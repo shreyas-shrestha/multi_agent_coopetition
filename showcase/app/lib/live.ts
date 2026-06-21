@@ -31,9 +31,11 @@ export type LiveStreamHandlers = {
   onComplete: (payload: {
     reward: ReplayBundle["reward"];
     final_record: ReplayBundle["final_record"];
+    verdict?: NonNullable<TimelineEvent["verdict"]> | null;
     meta?: Record<string, unknown>;
   }) => void;
   onError: (message: string) => void;
+  onPing?: () => void;
 };
 
 export function openLiveHearingStream(
@@ -58,6 +60,7 @@ export function openLiveHearingStream(
       const payload = JSON.parse((message as MessageEvent<string>).data) as {
         reward: ReplayBundle["reward"];
         final_record: ReplayBundle["final_record"];
+        verdict?: NonNullable<TimelineEvent["verdict"]> | null;
         meta?: Record<string, unknown>;
       };
       handlers.onComplete(payload);
@@ -66,6 +69,10 @@ export function openLiveHearingStream(
       handlers.onError(error instanceof Error ? error.message : "Malformed completion event");
       source.close();
     }
+  });
+
+  source.addEventListener("ping", () => {
+    handlers.onPing?.();
   });
 
   source.addEventListener("hearing_error", (message) => {
@@ -89,9 +96,7 @@ export function openLiveHearingStream(
       source.close();
       return;
     }
-    if (source.readyState === EventSource.CLOSED) return;
-    handlers.onError("Live hearing connection lost");
-    source.close();
+    // Transient network/proxy errors: EventSource auto-reconnects. Do not close.
   });
 
   return source;

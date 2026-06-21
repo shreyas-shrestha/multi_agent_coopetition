@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -115,11 +116,25 @@ def web() -> Any:
             await queue.put(event)
 
         async def runner() -> None:
+            stop = asyncio.Event()
+
+            async def keepalive() -> None:
+                try:
+                    while not stop.is_set():
+                        await asyncio.sleep(12)
+                        if not stop.is_set():
+                            await queue.put({"type": "ping", "ts": time.time()})
+                except asyncio.CancelledError:
+                    return
+
+            ping_task = asyncio.create_task(keepalive())
             try:
                 await run_live_hearing(world_id, emit, max_steps=max_steps)
             except Exception as exc:  # noqa: BLE001 - surface to client stream
                 await queue.put({"type": "hearing_error", "message": str(exc)})
             finally:
+                stop.set()
+                ping_task.cancel()
                 await queue.put(None)
 
         asyncio.create_task(runner())
@@ -137,6 +152,8 @@ def web() -> Any:
                     sse_type = "complete"
                 elif raw_type == "hearing_error":
                     sse_type = "hearing_error"
+                elif raw_type == "ping":
+                    sse_type = "ping"
                 else:
                     sse_type = "timeline"
                 yield f"event: {sse_type}\ndata: {json.dumps(item)}\n\n"

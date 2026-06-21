@@ -80,6 +80,17 @@ function decisionLogFor(event: TimelineEvent): string {
   return event.message ?? "ok";
 }
 
+function verdictFromArgs(args?: Record<string, unknown>): NonNullable<TimelineEvent["verdict"]> | undefined {
+  if (!args || typeof args.decision !== "string" || !args.decision) return undefined;
+  return {
+    decision: args.decision,
+    confidence: typeof args.confidence === "number" ? args.confidence : 0,
+    root_cause: String(args.root_cause ?? ""),
+    citation_ids: Array.isArray(args.citation_ids) ? args.citation_ids.map(String) : [],
+    rationale: String(args.rationale ?? ""),
+  };
+}
+
 function emptySessionState(budgetTotal: number) {
   return {
     liveEvents: [] as LiveEventRow[],
@@ -282,23 +293,26 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
         return;
       }
 
-      if (tool === "submit_verdict" && verdict) {
-        pushEvent({
-          id: rowId,
-          eventIndex: event.index,
-          tool: toolLabel(tool),
-          source: "speaker",
-          tokenDelta: 0,
-          budgetUsed: event.budget_used,
-          budgetRemaining: event.budget_remaining ?? budgetRemaining,
-          decisionLog: decisionLogFor(event),
-          args: event.args,
-          verdict,
-          flash: true,
-        });
-        applyBudget(event);
-        if (!liveMode) await sleep(400 + jitter(), signal);
-        return;
+      if (tool === "submit_verdict") {
+        const resolvedVerdict = verdict ?? verdictFromArgs(event.args);
+        if (resolvedVerdict) {
+          pushEvent({
+            id: rowId,
+            eventIndex: event.index,
+            tool: toolLabel(tool),
+            source: "speaker",
+            tokenDelta: 0,
+            budgetUsed: event.budget_used,
+            budgetRemaining: event.budget_remaining ?? budgetRemaining,
+            decisionLog: decisionLogFor({ ...event, verdict: resolvedVerdict }),
+            args: event.args,
+            verdict: resolvedVerdict,
+            flash: true,
+          });
+          applyBudget(event);
+          if (!liveMode) await sleep(400 + jitter(), signal);
+          return;
+        }
       }
 
       pushEvent({
@@ -328,6 +342,8 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
 
     const streamDoneRef = { current: false };
     let errored = false;
+    let lastActivityAt = Date.now();
+    const idleFatalMs = 5 * 60 * 1000;
 
     const runLive = async () => {
       setPhase("running");
@@ -339,10 +355,15 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
 
       eventSourceRef.current = openLiveHearingStream(worldId, {
         onTimeline: (event) => {
+          lastActivityAt = Date.now();
           if (event.type === "session_start" && event.index === 0 && cursor > 0) return;
           liveTimelineRef.current.push(event);
         },
+        onPing: () => {
+          lastActivityAt = Date.now();
+        },
         onComplete: (payload) => {
+          lastActivityAt = Date.now();
           streamDoneRef.current = true;
           setBundle((prev) =>
             prev
@@ -350,10 +371,25 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
                   ...prev,
                   reward: payload.reward,
                   final_record: payload.final_record,
+                  verdict: payload.verdict ?? prev.verdict,
                   meta: { ...prev.meta, ...(payload.meta ?? {}) },
                 }
               : prev,
           );
+          if (payload.verdict) {
+            const verdictEvent: TimelineEvent = {
+              index: liveTimelineRef.current.length,
+              type: "tool_call",
+              tool: "submit_verdict",
+              ok: true,
+              message: "verdict recorded",
+              verdict: payload.verdict,
+            };
+            const alreadyHasVerdict = liveTimelineRef.current.some((event) => event.verdict);
+            if (!alreadyHasVerdict) {
+              liveTimelineRef.current.push(verdictEvent);
+            }
+          }
         },
         onError: (message) => {
           streamDoneRef.current = true;
@@ -364,6 +400,13 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
       });
 
       while (!signal.aborted && !streamDoneRef.current) {
+        if (Date.now() - lastActivityAt > idleFatalMs) {
+          streamDoneRef.current = true;
+          errored = true;
+          setError("Live hearing timed out — no activity for 5 minutes");
+          setPhase("error");
+          break;
+        }
         const pending = liveTimelineRef.current.slice(cursor);
         if (pending.length === 0) {
           await sleep(liveMode ? 50 : 150, signal);
