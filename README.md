@@ -206,3 +206,22 @@ modal run modal_benchmark.py --task-start 200 --task-count 30 --rollouts-per-tas
 
 The default benchmark is 30 held-out tasks with two rollouts per task for each model. Modal provides
 durable orchestration; inference still uses the HUD gateway and its Tinker-backed model endpoint.
+
+## Modal live orchestrator (Vercel hearings)
+
+`modal_orchestrator.py` exposes an HTTP + SSE API for live hearings from the showcase UI:
+
+```bash
+modal secret create context-window-parliament-hud \
+  HUD_API_KEY="$HUD_API_KEY" \
+  ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+modal deploy modal_orchestrator.py
+```
+
+Set `NEXT_PUBLIC_ORCHESTRATOR_URL` in Vercel to the deployed `web` URL. When the showcase selects
+**Trained Speaker**, the UI streams a live hearing:
+
+- **Speaker:** `parliament-qwen36-35b-clean` via HUD Gateway
+- **Specialists:** Anthropic Claude Haiku (`claude-haiku-4-5-20251001`) via `ANTHROPIC_API_KEY` on Modal
+
+See `showcase/README.md` for the full Vercel wiring.

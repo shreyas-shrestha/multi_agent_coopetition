@@ -18,11 +18,11 @@ export function TrainingTab() {
           Model
         </div>
         <div className="mono" style={{ marginTop: 8, fontSize: 14, fontWeight: 500 }}>
-          parliament-qwen36-35b
+          parliament-qwen36-35b-clean
         </div>
         <p style={{ marginTop: 8, fontSize: 12, color: "var(--muted-3000)" }}>Base: Qwen/Qwen3.6-35B-A3B</p>
         <p style={{ marginTop: 4, fontSize: 12, color: "var(--muted-3000)" }}>
-          Checkpoint mean reward: <span style={{ color: "var(--primary-3000)" }}>0.758</span>
+          HEAD step-000002 · mean reward: <span style={{ color: "var(--primary-3000)" }}>0.773</span>
         </p>
       </div>
       <div className="ph-panel" style={{ padding: 16 }}>

@@ -1,9 +1,9 @@
 {
-  "model_slug": "parliament-qwen36-35b",
-  "model_id": "ad10a3d8-cb8d-40ca-9d8a-89603cd859be",
-  "model_url": "https://hud.ai/models/ad10a3d8-cb8d-40ca-9d8a-89603cd859be",
+  "model_slug": "parliament-qwen36-35b-clean",
+  "model_id": "e073144c-0055-431a-b439-8a43ec8318b5",
+  "model_url": "https://hud.ai/models/e073144c-0055-431a-b439-8a43ec8318b5",
   "base_model": "Qwen/Qwen3.6-35B-A3B",
-  "notes": "Sampler weights are hosted on HUD/Tinker; eval with -m parliament-qwen36-35b --gateway serves the active checkpoint head.",
+  "notes": "Sampler weights are hosted on HUD/Tinker; eval with -m parliament-qwen36-35b-clean --gateway serves the active checkpoint head.",
   "training_config": {
     "loss_fn": "importance_sampling",
     "group_size": 8,
@@ -15,13 +15,19 @@
   "checkpoints": [
     {
       "name": "step-000001",
-      "id": "12755bac-f67b-4815-8027-5fb66667d68b",
+      "is_active": false,
+      "created_at": "2026-06-21T07:26:00Z",
+      "num_traces": 1600,
+      "mean_reward": 0.674,
+      "loss": "importance_sampling"
+    },
+    {
+      "name": "step-000002",
       "is_active": true,
-      "created_at": "2026-06-21T06:03:42Z",
-      "num_traces": 832,
-      "num_groups": 104,
-      "mean_reward": 0.758,
-      "training_jobs": ["bf19ae88-281c-499b-8c14-aac795f74e9f"]
+      "created_at": "2026-06-21T13:45:39Z",
+      "num_traces": 1520,
+      "mean_reward": 0.773,
+      "loss": "importance_sampling"
     }
   ],
   "eval_jobs": {

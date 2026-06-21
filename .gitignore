@@ -10,5 +10,6 @@ skills-lock.json
 node_modules/
 .next/
 showcase/app/.next/
+showcase/app/out/
 showcase/**/node_modules/
 

@@ -1,10 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  isLivePolicy,
+  loadLivePreview,
+  openLiveHearingStream,
+} from "@/lib/live";
 import { loadReplay } from "@/lib/replay";
 import type { PolicyId, ReplayBundle, SpecialistCard, TimelineEvent } from "@/lib/types";
 
-export type SessionPhase = "loading" | "ready" | "running" | "complete";
+export type SessionPhase = "loading" | "ready" | "running" | "complete" | "error";
 
 export interface LiveEventRow {
   id: string;
@@ -89,9 +94,11 @@ function emptySessionState(budgetTotal: number) {
 }
 
 export function useSessionStream(worldId: string, policy: PolicyId) {
+  const liveMode = isLivePolicy(policy);
   const [bundle, setBundle] = useState<ReplayBundle | null>(null);
   const [runToken, setRunToken] = useState(0);
   const [phase, setPhase] = useState<SessionPhase>("loading");
+  const [error, setError] = useState<string | null>(null);
   const [liveEvents, setLiveEvents] = useState<LiveEventRow[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [transfer, setTransfer] = useState<TransferState | null>(null);
@@ -101,6 +108,8 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
   const [activeSpecialistId, setActiveSpecialistId] = useState<string | null>(null);
   const [visibleSpecialistIds, setVisibleSpecialistIds] = useState<string[]>([]);
   const [sampledMap, setSampledMap] = useState<Record<string, SampledInfo>>({});
+  const liveTimelineRef = useRef<TimelineEvent[]>([]);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   const resetToReady = useCallback((loaded: ReplayBundle) => {
     const blank = emptySessionState(loaded.world.token_budget);
@@ -113,17 +122,30 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
     setVisibleSpecialistIds(blank.visibleSpecialistIds);
     setSampledMap(blank.sampledMap);
     setExpandedId(blank.expandedId);
+    setError(null);
     setPhase("ready");
   }, []);
 
   useEffect(() => {
     setPhase("loading");
     setRunToken(0);
-    loadReplay(worldId, policy).then((loaded) => {
-      setBundle(loaded);
-      resetToReady(loaded);
-    });
-  }, [worldId, policy, resetToReady]);
+    setError(null);
+    liveTimelineRef.current = [];
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
+
+    const loader = liveMode ? loadLivePreview(worldId) : loadReplay(worldId, policy);
+    loader
+      .then((loaded) => {
+        setBundle(loaded);
+        resetToReady(loaded);
+      })
+      .catch((err) => {
+        setBundle(null);
+        setError(err instanceof Error ? err.message : "Unable to load hearing");
+        setPhase("error");
+      });
+  }, [worldId, policy, liveMode, resetToReady]);
 
   const start = useCallback(() => {
     if (!bundle || phase === "running" || phase === "loading") return;
@@ -137,11 +159,15 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
     setVisibleSpecialistIds(blank.visibleSpecialistIds);
     setSampledMap(blank.sampledMap);
     setExpandedId(blank.expandedId);
+    setError(null);
+    liveTimelineRef.current = liveMode ? [bundle.timeline[0]] : bundle.timeline;
     setRunToken((t) => t + 1);
-  }, [bundle, phase]);
+  }, [bundle, phase, liveMode]);
 
   const dismiss = useCallback(() => {
     if (!bundle) return;
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
     resetToReady(bundle);
   }, [bundle, resetToReady]);
 
@@ -166,9 +192,7 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
       }, 900);
     };
 
-    const runTransfer = async (
-      testimony: NonNullable<TimelineEvent["testimony_added"]>,
-    ) => {
+    const runTransfer = async (testimony: NonNullable<TimelineEvent["testimony_added"]>) => {
       setActiveSpecialistId(testimony.specialist_id);
       setTransfer({
         specialistId: testimony.specialist_id,
@@ -197,96 +221,166 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
       setActiveSpecialistId(null);
     };
 
-    const run = async () => {
-      setPhase("running");
+    const processEvent = async (event: TimelineEvent) => {
+      if (signal.aborted) return;
 
-      const roster = bundle.timeline[0]?.payload?.specialists ?? [];
-
-      for (const event of bundle.timeline) {
-        if (signal.aborted) return;
-
-        if (event.type === "session_start") {
-          for (let i = 0; i < roster.length; i++) {
-            await sleep(40 + i * 48, signal);
-            setVisibleSpecialistIds((ids) => [...ids, roster[i].id]);
-          }
-          await sleep(240 + jitter(), signal);
-          continue;
+      if (event.type === "session_start") {
+        const roster = event.payload?.specialists ?? [];
+        for (let i = 0; i < roster.length; i++) {
+          await sleep(40 + i * 48, signal);
+          setVisibleSpecialistIds((ids) => [...ids, roster[i].id]);
         }
+        await sleep(240 + jitter(), signal);
+        return;
+      }
 
-        const tool = event.tool ?? "unknown";
-        const testimony = event.testimony_added;
-        const verdict = event.verdict;
-        const rowId = `evt-${event.index}`;
+      const tool = event.tool ?? "unknown";
+      const testimony = event.testimony_added;
+      const verdict = event.verdict;
+      const rowId = `evt-${event.index}`;
 
-        if (testimony && (tool === "grant_floor" || tool === "cross_examine")) {
-          const question =
-            tool === "cross_examine" && typeof event.args?.question === "string"
-              ? event.args.question
-              : undefined;
-
-          await runTransfer(testimony);
-
-          pushEvent({
-            id: rowId,
-            eventIndex: event.index,
-            tool: toolLabel(tool),
-            source: testimony.specialist_name,
-            tokenDelta: testimony.token_count,
-            budgetRemaining: event.budget_remaining ?? budgetRemaining,
-            decisionLog: decisionLogFor(event),
-            args: event.args,
-            testimony,
-            question,
-            flash: true,
-          });
-          applyBudget(event);
-          await sleep(220 + jitter(), signal);
-          continue;
-        }
-
-        if (tool === "submit_verdict" && verdict) {
-          pushEvent({
-            id: rowId,
-            eventIndex: event.index,
-            tool: toolLabel(tool),
-            source: "speaker",
-            tokenDelta: 0,
-            budgetRemaining: event.budget_remaining ?? budgetRemaining,
-            decisionLog: decisionLogFor(event),
-            args: event.args,
-            verdict,
-            flash: true,
-          });
-          applyBudget(event);
-          await sleep(400 + jitter(), signal);
-          continue;
-        }
-
+      if (testimony && (tool === "grant_floor" || tool === "cross_examine")) {
+        const question =
+          tool === "cross_examine" && typeof event.args?.question === "string"
+            ? event.args.question
+            : undefined;
+        await runTransfer(testimony);
         pushEvent({
           id: rowId,
           eventIndex: event.index,
           tool: toolLabel(tool),
-          source: "—",
+          source: testimony.specialist_name,
+          tokenDelta: testimony.token_count,
+          budgetRemaining: event.budget_remaining ?? budgetRemaining,
+          decisionLog: decisionLogFor(event),
+          args: event.args,
+          testimony,
+          question,
+          flash: true,
+        });
+        applyBudget(event);
+        await sleep(220 + jitter(), signal);
+        return;
+      }
+
+      if (tool === "submit_verdict" && verdict) {
+        pushEvent({
+          id: rowId,
+          eventIndex: event.index,
+          tool: toolLabel(tool),
+          source: "speaker",
           tokenDelta: 0,
           budgetRemaining: event.budget_remaining ?? budgetRemaining,
           decisionLog: decisionLogFor(event),
           args: event.args,
+          verdict,
           flash: true,
         });
         applyBudget(event);
-        await sleep(160 + jitter(30, 90), signal);
+        await sleep(400 + jitter(), signal);
+        return;
       }
 
+      pushEvent({
+        id: rowId,
+        eventIndex: event.index,
+        tool: toolLabel(tool),
+        source: "—",
+        tokenDelta: 0,
+        budgetRemaining: event.budget_remaining ?? budgetRemaining,
+        decisionLog: decisionLogFor(event),
+        args: event.args,
+        flash: true,
+      });
+      applyBudget(event);
+      await sleep(160 + jitter(30, 90), signal);
+    };
+
+    const runReplay = async () => {
+      setPhase("running");
+      for (const event of bundle.timeline) {
+        if (signal.aborted) return;
+        await processEvent(event);
+      }
       setPhase("complete");
     };
 
-    run().catch((err) => {
-      if (err?.name !== "AbortError") console.error(err);
+    const streamDoneRef = { current: false };
+    let errored = false;
+
+    const runLive = async () => {
+      setPhase("running");
+      let cursor = 0;
+      if (bundle.timeline[0]) {
+        await processEvent(bundle.timeline[0]);
+        cursor = 1;
+      }
+
+      eventSourceRef.current = openLiveHearingStream(worldId, {
+        onTimeline: (event) => {
+          if (event.type === "session_start" && event.index === 0 && cursor > 0) return;
+          liveTimelineRef.current.push(event);
+        },
+        onComplete: (payload) => {
+          streamDoneRef.current = true;
+          setBundle((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  reward: payload.reward,
+                  final_record: payload.final_record,
+                  meta: { ...prev.meta, ...(payload.meta ?? {}) },
+                }
+              : prev,
+          );
+        },
+        onError: (message) => {
+          streamDoneRef.current = true;
+          errored = true;
+          setError(message);
+          setPhase("error");
+        },
+      });
+
+      while (!signal.aborted && !streamDoneRef.current) {
+        const pending = liveTimelineRef.current.slice(cursor);
+        if (pending.length === 0) {
+          await sleep(150, signal);
+          continue;
+        }
+        for (const event of pending) {
+          if (signal.aborted) return;
+          await processEvent(event);
+          cursor += 1;
+        }
+      }
+
+      const trailing = liveTimelineRef.current.slice(cursor);
+      for (const event of trailing) {
+        if (signal.aborted) return;
+        await processEvent(event);
+      }
+
+      eventSourceRef.current?.close();
+      eventSourceRef.current = null;
+      if (!signal.aborted && !errored) setPhase("complete");
+    };
+
+    const runner = liveMode ? runLive : runReplay;
+    runner().catch((err) => {
+      if (err?.name !== "AbortError") {
+        console.error(err);
+        setError(err instanceof Error ? err.message : "Hearing failed");
+        setPhase("error");
+      }
     });
 
-    return () => controller.abort();
-  }, [bundle, runToken, budgetRemaining]);
+    return () => {
+      controller.abort();
+      eventSourceRef.current?.close();
+      eventSourceRef.current = null;
+    };
+  }, [bundle, runToken, budgetRemaining, liveMode, worldId]);
 
   const rosterPreview = bundle?.timeline[0]?.payload?.specialists ?? [];
 
@@ -314,6 +408,8 @@ export function useSessionStream(worldId: string, policy: PolicyId) {
   return {
     bundle,
     phase,
+    error,
+    liveMode,
     liveEvents,
     expandedId,
     setExpandedId,

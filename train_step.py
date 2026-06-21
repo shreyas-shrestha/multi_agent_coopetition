@@ -9,7 +9,7 @@ from hud import TrainingClient
 from hud.utils.platform import PlatformClient
 
 DEFAULT_JOB_ID = "bf19ae88-281c-499b-8c14-aac795f74e9f"
-MODEL = "parliament-qwen36-35b"
+MODEL = "parliament-qwen36-35b-clean"
 GROUP_SIZE = 8
 LR = 1e-5
 PAGE_SIZE = 1000

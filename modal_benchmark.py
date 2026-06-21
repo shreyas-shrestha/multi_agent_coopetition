@@ -76,6 +76,7 @@ def _eval(
         "openai_compatible",
         "--model",
         model,
+        "--gateway",
         "--task-ids",
         _task_ids(task_start, task_count),
         "--group",

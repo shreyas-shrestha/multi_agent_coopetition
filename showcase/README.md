@@ -33,8 +33,26 @@ If commands still show `npm ci --prefix showcase`, Root Directory is still set t
 
 No environment variables are needed for the replay-only showcase.
 
+For **live hearings** (Trained Speaker via HUD Gateway + Anthropic Haiku specialists):
+
+1. Deploy the Modal orchestrator:
+   ```bash
+   modal secret create context-window-parliament-hud \
+     HUD_API_KEY="$HUD_API_KEY" \
+     ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+   modal deploy modal_orchestrator.py
+   ```
+2. Copy the `web` URL from Modal (ends in `.modal.run`).
+3. In Vercel → **Environment Variables**, set:
+   ```
+   NEXT_PUBLIC_ORCHESTRATOR_URL=https://YOUR-WORKSPACE--context-window-parliament-orchestrator-web.modal.run
+   ```
+4. Redeploy the showcase. Select **Trained Speaker** — the UI switches to live mode automatically.
+
+Specialists use `PARLIAMENT_ANTHROPIC_MODEL=claude-haiku-4-5-20251001` on Modal. The Speaker uses `parliament-qwen36-35b-clean` through the HUD Gateway (no weight export).
+
 ```bash
 cd showcase/app && npx vercel --prod
 ```
 
-When the live Modal endpoint is connected later, add its public URL as a Vercel environment variable and keep `HUD_API_KEY` and `ANTHROPIC_API_KEY` only in Modal secrets.
+Keep `HUD_API_KEY` and `ANTHROPIC_API_KEY` in Modal secrets only — never in the browser or Vercel.
