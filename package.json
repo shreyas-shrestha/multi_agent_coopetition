@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "name": "multi-agent-coopetition",
+  "scripts": {
+    "build": "npm run build --prefix showcase"
+  }
+}
