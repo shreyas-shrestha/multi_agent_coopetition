@@ -11,7 +11,7 @@
     "world_id": "incident-response-medium-004",
     "domain": "incident_response",
     "difficulty": "medium",
-    "narrative": "An incident commander must diagnose a production incident and choose action.",
+    "narrative": "Error rates on /recommendations spiked from 0.4% to 7.8% minutes after a recommendation-cache feature flag hit 100%. Cache misses jumped to 83% and database load followed. Cross-examine SRE, API, database, and deploy witnesses under a 500-token budget to find the root cause and choose the right mitigation.",
     "token_budget": 500,
     "max_interactions": 10,
     "decision_options": [
@@ -78,7 +78,7 @@
       "index": 0,
       "type": "session_start",
       "payload": {
-        "narrative": "An incident commander must diagnose a production incident and choose action.",
+        "narrative": "Error rates on /recommendations spiked from 0.4% to 7.8% minutes after a recommendation-cache feature flag hit 100%. Cache misses jumped to 83% and database load followed. Cross-examine SRE, API, database, and deploy witnesses under a 500-token budget to find the root cause and choose the right mitigation.",
         "specialists": [
           {
             "id": "support",

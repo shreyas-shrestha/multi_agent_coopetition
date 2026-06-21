@@ -67,7 +67,11 @@ DOMAIN_ORDER = (
 
 DOMAIN_NARRATIVES = {
     "product_rollback": "An internal product review is deciding whether to roll back Feature X after launch.",
-    "incident_response": "An incident commander must diagnose a production incident and choose action.",
+    "incident_response": (
+        "A production incident is underway: API error rates are climbing, dashboards disagree, "
+        "and every team has a theory. Cross-examine SRE, database, API, and deploy specialists "
+        "under a tight token budget to find the root cause and choose the right mitigation."
+    ),
     "investment_committee": "An investment committee must decide whether to invest, pass, or wait.",
     "security_access_review": "A security review board must decide how to respond to an access anomaly.",
     "supply_chain_disruption": "An operations team must identify why a customer shipment plan is failing.",
@@ -76,6 +80,15 @@ DOMAIN_NARRATIVES = {
     "marketplace_integrity": "A marketplace integrity team must respond to suspicious platform behavior.",
     "customer_success_escalation": "A customer-success escalation room must choose the right recovery action.",
     "civic_program_evaluation": "A civic program board must decide whether a pilot should continue, pause, or change.",
+}
+
+WORLD_NARRATIVES: dict[str, str] = {
+    "incident-response-medium-004": (
+        "Error rates on /recommendations spiked from 0.4% to 7.8% minutes after a recommendation-cache "
+        "feature flag hit 100%. Cache misses jumped to 83% and database load followed. Cross-examine "
+        "SRE, API, database, and deploy witnesses under a 500-token budget to find the root cause "
+        "and choose the right mitigation."
+    ),
 }
 
 DOMAIN_SLUGS = {
