@@ -11,3 +11,19 @@ npm run dev
 ```
 
 Run `npm run build` before shipping. The default hearing is `incident-response-medium-004` with the Trained Speaker policy.
+
+## Deploy to Vercel
+
+The repository-root `vercel.json` configures this monorepo automatically. Import the repository in
+Vercel and leave the Root Directory set to the repository root. No environment variables are needed
+for the current replay-only showcase.
+
+For a CLI deployment:
+
+```bash
+npx vercel
+npx vercel --prod
+```
+
+When the live Modal endpoint is connected later, add its public URL as a Vercel environment variable
+and keep `HUD_API_KEY` and `ANTHROPIC_API_KEY` only in Modal secrets.
