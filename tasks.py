@@ -14,14 +14,20 @@ try:
 except Exception:  # pragma: no cover - optional in local unit tests
     Taskset = None  # type: ignore[assignment]
 
-tasks: list[Any] = []
-if env is not None:
+def _build_tasks() -> list[Any]:
+    built: list[Any] = []
+    if env is None:
+        return built
     for row in TASK_ROWS:
-        task = context_parliament(**row)
-        task.slug = str(row["world_id"])
-        tasks.append(task)
+        item = context_parliament(**row)
+        item.slug = str(row["world_id"])
+        built.append(item)
+    return built
+
+
+_built_tasks = _build_tasks()
 
 try:
-    taskset = Taskset(TASKSET_NAME, tasks) if Taskset is not None else tasks
+    taskset = Taskset(TASKSET_NAME, _built_tasks) if Taskset is not None else _built_tasks
 except TypeError:
-    taskset = tasks
+    taskset = _built_tasks
