@@ -14,45 +14,53 @@ Run `npm run build` before shipping. The default hearing is `incident-response-m
 
 ## Deploy to Vercel
 
-Grayed **Install Command** / **Build Command** in the Vercel dashboard is normal — they come from `vercel.json` in the repo, not the UI. Edit the file and push to change them.
+### Option A — repo root (simplest)
 
-### Recommended setup
+1. Import the repository in Vercel.
+2. Leave **Root Directory** empty (repository root).
+3. In **Project Settings → Build & Development Settings**, clear any custom **Install Command** and **Build Command** overrides so the repo-root `vercel.json` is used:
+   - Install: `npm ci --prefix showcase`
+   - Build: `npm run build --prefix showcase`
+4. **Framework Preset:** Next.js.
 
-1. Import `github.com/shreyas-shrestha/multi_agent_coopetition`.
-2. **Settings → General → Root Directory** → `showcase/app` → Save.
-3. Enable **Include source files outside of the Root Directory** (same section).
-4. **Settings → Build & Development Settings** → turn **off** overrides for Install, Build, and Output Directory.
-5. Redeploy from latest `main`.
+### Option B — app subdirectory
 
-Vercel reads `showcase/app/vercel.json` (edit that file and push to change grayed commands):
+1. Set **Root Directory** to `showcase/app`.
+2. Clear install/build overrides so `showcase/app/vercel.json` applies:
+   - Install: `cd .. && npm ci`
+   - Build: `npm run build`
 
-- Install: `cd .. && npm ci`
-- Build: `npm run build`
+**Do not** combine Root Directory `showcase/app` with Install Command `npm ci --prefix showcase` — that path is wrong and causes the `EUSAGE` / missing lockfile error.
 
-If commands still show `npm ci --prefix showcase`, Root Directory is still set to the repo root — change it to `showcase/app` and redeploy. If settings stay stuck, disconnect and re-import the GitHub repo.
+Sync your fork to latest `main` before redeploying. No environment variables are needed for the replay-only showcase.
 
-No environment variables are needed for the replay-only showcase.
-
-For **live hearings** (Trained Speaker via HUD Gateway + Anthropic Haiku specialists):
-
-1. Deploy the Modal orchestrator:
-   ```bash
-   modal secret create context-window-parliament-hud \
-     HUD_API_KEY="$HUD_API_KEY" \
-     ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
-   modal deploy modal_orchestrator.py
-   ```
-2. Copy the `web` URL from Modal (ends in `.modal.run`).
-3. In Vercel → **Environment Variables**, set:
-   ```
-   NEXT_PUBLIC_ORCHESTRATOR_URL=https://YOUR-WORKSPACE--context-window-parliament-orchestrator-web.modal.run
-   ```
-4. Redeploy the showcase. Select **Trained Speaker** — the UI switches to live mode automatically.
-
-Specialists use `PARLIAMENT_ANTHROPIC_MODEL=claude-haiku-4-5-20251001` on Modal. The Speaker uses `parliament-qwen36-35b-clean` through the HUD Gateway (no weight export).
+For a CLI deployment:
 
 ```bash
-cd showcase/app && npx vercel --prod
+npx vercel
+npx vercel --prod
 ```
 
-Keep `HUD_API_KEY` and `ANTHROPIC_API_KEY` in Modal secrets only — never in the browser or Vercel.
+When the live Modal endpoint is connected later, add its public URL as a Vercel environment variable
+and keep `HUD_API_KEY` and `ANTHROPIC_API_KEY` only in Modal secrets.
+
+## Live Modal replay mode
+
+The bundled replay JSON remains the default. To use live inference, deploy the Modal app and point
+the Next.js app at the `live_replay` web function:
+
+```bash
+modal deploy ../modal_benchmark.py
+```
+
+Set these in Vercel or your local Next.js environment:
+
+```bash
+PARLIAMENT_MODAL_RUN_URL=https://<workspace>--context-window-parliament-benchmark-live-replay.modal.run
+NEXT_PUBLIC_PARLIAMENT_LIVE=1
+```
+
+You can also enable live mode for one browser session with `?live=1`. If the Modal endpoint is not
+configured or a live run fails, the frontend falls back to the bundled replay for the selected world.
+Use `PARLIAMENT_MODAL_KEY` and `PARLIAMENT_MODAL_SECRET` when the Modal endpoint is protected with
+proxy auth tokens.

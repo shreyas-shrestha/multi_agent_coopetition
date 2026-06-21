@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { loadStrategySummary } from "@/lib/replay";
 import type { PolicyId, StrategySummary } from "@/lib/types";
-import { PropertyPill } from "./PropertyPill";
+import { PropertyPill } from "./posthog/PropertyPill";
 
 export function CompareTab({ replayAs }: { replayAs: (p: PolicyId) => void }) {
   const [data, setData] = useState<StrategySummary | null>(null);
