@@ -4,6 +4,7 @@ import json
 from collections import Counter, defaultdict
 
 from parliament.scoring import detect_public_leakage
+from parliament.scenarios import DIFFICULTY_TARGETS, DOMAIN_ORDER, TASKS_PER_DOMAIN
 from parliament.worlds import build_shipped_worlds, shipped_task_specs
 
 
@@ -17,12 +18,26 @@ def _owner_of(world, fact_id: str) -> str:
 def test_shipped_taskset_has_required_size_and_slugs() -> None:
     rows = shipped_task_specs()
     slugs = {str(row["world_id"]) for row in rows}
-    assert len(rows) >= 36
+    assert len(rows) == len(DOMAIN_ORDER) * TASKS_PER_DOMAIN
+    assert Counter(str(row["domain"]) for row in rows) == {
+        domain: TASKS_PER_DOMAIN for domain in DOMAIN_ORDER
+    }
+    assert Counter(str(row["difficulty"]) for row in rows) == {
+        difficulty: target * len(DOMAIN_ORDER)
+        for difficulty, target in DIFFICULTY_TARGETS.items()
+    }
     assert "product-rollback-easy-001" in slugs
     assert "product-rollback-medium-002" in slugs
     assert "product-rollback-hard-003" in slugs
     assert "incident-response-medium-004" in slugs
     assert "investment-committee-hard-005" in slugs
+
+    worlds = {world.world_id: world for world in build_shipped_worlds()}
+    assert worlds["product-rollback-easy-001"].truth_root_cause == "data_bug"
+    assert worlds["product-rollback-medium-002"].truth_root_cause == "onboarding_copy"
+    assert worlds["product-rollback-hard-003"].truth_root_cause == "seasonality"
+    assert worlds["incident-response-medium-004"].truth_root_cause == "cache_thundering_herd"
+    assert worlds["investment-committee-hard-005"].truth_root_cause == "market_pull"
 
 
 def test_generated_worlds_are_balanced() -> None:
@@ -33,31 +48,36 @@ def test_generated_worlds_are_balanced() -> None:
 
     for domain, domain_worlds in by_domain.items():
         assert len({world.truth_decision for world in domain_worlds}) >= 3, domain
-        assert len({world.truth_root_cause for world in domain_worlds}) >= 3, domain
+        assert len({world.truth_root_cause for world in domain_worlds}) >= 6, domain
 
     assert len({world.truth_decision for world in worlds}) >= 3
     assert len({world.truth_root_cause for world in worlds}) >= 6
 
-    quiet_key = 0
-    loud_decoy = 0
-    cross_exam = 0
-    floor_solvable = 0
-    for world in worlds:
-        if world.metadata.get("requires_cross_exam"):
-            cross_exam += 1
-        if world.metadata.get("direct_floor_solvable"):
-            floor_solvable += 1
-        for specialist in world.specialists.values():
-            owns_required = bool(set(specialist.private_fact_ids) & set(world.required_fact_ids))
-            owns_decoy_only = bool(set(specialist.private_fact_ids) & set(world.decoy_fact_ids)) and not owns_required
-            if specialist.persona_policy == "underconfident_expert" and owns_required:
-                quiet_key += 1
-            if specialist.persona_policy == "verbose_lobbyist" and owns_decoy_only:
-                loud_decoy += 1
-    assert quiet_key >= len(worlds) * 0.25
-    assert loud_decoy >= len(worlds) * 0.25
-    assert cross_exam >= len(worlds) * 0.25
-    assert floor_solvable >= len(worlds) * 0.25
+    for domain, domain_worlds in by_domain.items():
+        quiet_key = 0
+        loud_decoy = 0
+        cross_exam = 0
+        floor_solvable = 0
+        for world in domain_worlds:
+            if world.metadata.get("requires_cross_exam"):
+                cross_exam += 1
+            if world.metadata.get("direct_floor_solvable"):
+                floor_solvable += 1
+            owners = {fid for specialist in world.specialists.values() for fid in specialist.private_fact_ids}
+            assert set(world.facts) <= owners
+            for specialist in world.specialists.values():
+                owns_required = bool(set(specialist.private_fact_ids) & set(world.required_fact_ids))
+                owns_decoy_only = (
+                    bool(set(specialist.private_fact_ids) & set(world.decoy_fact_ids)) and not owns_required
+                )
+                if specialist.persona_policy == "underconfident_expert" and owns_required:
+                    quiet_key += 1
+                if specialist.persona_policy == "verbose_lobbyist" and owns_decoy_only:
+                    loud_decoy += 1
+        assert quiet_key >= 8, domain
+        assert loud_decoy >= 8, domain
+        assert cross_exam >= 12, domain
+        assert floor_solvable >= 12, domain
 
 
 def test_anti_hardcoding_properties() -> None:
@@ -91,4 +111,3 @@ def test_public_bids_do_not_leak_hidden_evidence() -> None:
             assert fact_id not in public_blob
         for hidden_label in ("required", "supporting", "decoy", "fact_weight", "truth_decision"):
             assert hidden_label not in public_blob
-

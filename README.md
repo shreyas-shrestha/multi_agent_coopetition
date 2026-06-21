@@ -15,6 +15,7 @@ Verified in this workspace:
 ```bash
 python -m pytest -q
 python scripts/simulate_strategies.py
+python scripts/audit_taskset.py
 ```
 
 With `uv` installed, the intended project commands are:
@@ -22,6 +23,7 @@ With `uv` installed, the intended project commands are:
 ```bash
 uv run pytest -q
 uv run python scripts/simulate_strategies.py
+uv run python scripts/audit_taskset.py
 ```
 
 The simulation prints strategy separation. In the current run:
@@ -31,6 +33,7 @@ targeted_oracle  > uniform_floor > loud_capture
 targeted_oracle  > random
 loud_capture     below 0.45
 targeted_oracle  above 0.80
+uniform_floor    clears loud_capture by more than 0.15
 ```
 
 ## HUD Integration
@@ -45,7 +48,7 @@ The HUD environment name is `context-window-parliament`. The task template is `c
 - `@env.initialize` starts the in-process MCP server on a free local port
 - `@env.shutdown` cancels the MCP server task
 - `env.py` defines `context_parliament`
-- `tasks.py` re-exports `env` and contains 36 generated task rows
+- `tasks.py` re-exports `env` and contains 500 generated task rows
 
 HUD commands for an installed HUD CLI:
 
@@ -92,13 +95,16 @@ Public bids may be biased, noisy, or underconfident. Exact hidden evidence, fact
 
 ## Task Generation
 
-The taskset ships 36 concrete worlds:
+The taskset ships 500 concrete worlds:
 
-- 3 domains: product rollback, incident response, investment committee
+- 10 domains: product rollback, incident response, investment committee, security access review,
+  supply chain disruption, manufacturing quality, research claim review, marketplace integrity,
+  customer success escalation, and civic program evaluation
 - 3 difficulty levels: easy, medium, hard
-- 4 seeds per domain and difficulty
+- 50 rows per domain
+- 170 easy, 170 medium, and 160 hard rows
 
-Worlds are generated from deterministic scenario families, not hand-authored one-offs. Across the shipped taskset, each domain has multiple truth decisions and root causes. Seeds rotate fact ownership, persona policy, loud decoys, quiet key specialists, and whether cross-examination is needed for high reward.
+Worlds are generated from deterministic scenario families, not hand-authored one-offs. Each domain has eight scenario templates with multiple truth decisions and root causes. Seeds rotate fact ownership, persona policy, loud decoys, quiet key specialists, and whether cross-examination is needed for high reward.
 
 Stable example slugs include:
 
@@ -133,6 +139,7 @@ Root cause is scored separately because the correct action and the correct causa
 ```text
 parliament/
   models.py
+  scenarios.py
   worlds.py
   facts.py
   specialists.py
@@ -146,6 +153,7 @@ controller/
 environment/
   server.py
 scripts/
+  audit_taskset.py
   simulate_strategies.py
 tests/
 ```
