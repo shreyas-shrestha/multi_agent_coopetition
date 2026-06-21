@@ -22,6 +22,7 @@ type Tone = "green" | "yellow" | "blue" | "neutral";
 
 const DEFAULT_WORLD = "incident-response-medium-004";
 const DEFAULT_POLICY: PolicyId = "targeted_oracle";
+const BRAND_NAME = "All I Have Is Attention";
 
 const GLYPH = {
   mark: "\u25c6",
@@ -1019,7 +1020,7 @@ export default function Page() {
               {GLYPH.mark}
             </div>
             <div>
-              <div className="cvp-brand-name">PARLIAMENT</div>
+              <div className="cvp-brand-name cvp-brand-name-long">{BRAND_NAME}</div>
               <p>context window</p>
             </div>
           </div>
@@ -1046,7 +1047,7 @@ export default function Page() {
 
         <section className="cvp-problem">
           <div>
-            <h1>{preset?.label ?? "Context Window Parliament"}</h1>
+            <h1>{preset?.label ?? BRAND_NAME}</h1>
             <p>{bundle?.world.narrative ?? loadError ?? "Loading hearing…"}</p>
           </div>
           <div className="cvp-problem-meta">

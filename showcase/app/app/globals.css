@@ -124,6 +124,14 @@ select {
   font-weight: 800;
 }
 
+.cvp-brand-name-long {
+  max-width: 11rem;
+  font-size: 14px;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+}
+
 .cvp-brand-row p {
   margin: 1px 0 0;
   color: #8b8b8b;

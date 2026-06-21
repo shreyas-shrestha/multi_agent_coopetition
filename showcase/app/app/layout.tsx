@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Dagboard Reference UI",
-  description: "Static showcase implementation of the Dagboard design reference.",
+  title: "All I Have Is Attention",
+  description: "Live and replay showcase for attention allocation under a fixed context budget.",
 };
 
 export default function Layout({ children }: { children: ReactNode }) {

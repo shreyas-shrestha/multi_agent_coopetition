@@ -60,7 +60,7 @@ export function ParliamentShell({
           <div className="ac-rail-brand">
             <span className="ac-rail-logo">🦔</span>
             <div>
-              <div className="ac-rail-name">Parliament</div>
+              <div className="ac-rail-name">All I Have Is Attention</div>
               <div className="ac-rail-env mono">context-window · HUD</div>
             </div>
           </div>
