@@ -1,0 +1,22 @@
+[project]
+name = "context-window-parliament"
+version = "0.1.0"
+description = "HUD v6 MVP for scarce-context multi-agent evidence allocation."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastmcp>=2.0",
+  "hud-python>=0.6.0",
+  "pytest>=8.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-p no:cacheprovider"
+
+[tool.ruff]
+line-length = 100
