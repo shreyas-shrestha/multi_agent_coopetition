@@ -1,6 +1,6 @@
 # All I Have Is Attention
 
-**Context Window Parliament** is a multi-agent evaluation environment where a **Speaker** must allocate scarce context-window budget among specialists who hold private evidence. Public bids are free but unreliable; decisive facts only enter the official record through paid floor time or targeted cross-examination.
+**All I Have Is Attention** is a multi-agent evaluation environment where a **Speaker** must allocate scarce context-window budget among specialists who hold private evidence. Public bids are free but unreliable; decisive facts only enter the official record through paid floor time or targeted cross-examination.
 
 The project ships:
 
