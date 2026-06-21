@@ -68,7 +68,7 @@ select {
   display: flex;
   min-height: 0;
   flex-direction: column;
-  padding: 16px 12px;
+  padding: 16px 12px 280px;
   background: var(--cvp-panel-soft);
   border-right: 1px solid #212121;
 }
@@ -218,6 +218,58 @@ select {
   font-size: 10px;
   font-weight: 800;
   text-align: center;
+}
+
+.cvp-session-actions {
+  position: absolute;
+  right: 12px;
+  bottom: 142px;
+  left: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.cvp-session-start,
+.cvp-session-reset {
+  height: 28px;
+  border: 1px solid #2b2b2b;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.cvp-session-start {
+  background: var(--cvp-green);
+  color: #0d0d0d;
+}
+
+.cvp-session-start:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cvp-session-reset {
+  background: #232323;
+  color: #bdbdbd;
+}
+
+.cvp-session-reset:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cvp-session-badge {
+  padding: 4px 8px;
+  border: 1px solid #2b2b2b;
+  border-radius: 4px;
+  background: #171717;
+  color: #9a9a9a;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .cvp-main-panel {

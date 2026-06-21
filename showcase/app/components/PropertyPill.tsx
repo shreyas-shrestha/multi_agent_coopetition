@@ -14,15 +14,13 @@ export function PropertyPill({
   return (
     <span
       className={cn(
-        "ph-tag",
-        variant === "green" && "ph-tag-green",
-        variant === "orange" && "ph-tag-orange",
-        variant === "blue" && "ph-tag-blue",
+        "cvp-pill",
+        variant === "green" && "green",
+        variant === "blue" && "blue",
         className,
       )}
     >
-      <span style={{ opacity: 0.65 }}>{label}</span>
-      {value}
+      <span style={{ opacity: 0.65 }}>{label}</span> {value}
     </span>
   );
 }
