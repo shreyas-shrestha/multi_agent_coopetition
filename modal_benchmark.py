@@ -105,7 +105,7 @@ def _eval(
 
 @app.function(
     image=image,
-    secrets=[modal.Secret.from_name(HUD_SECRET, required_keys=["HUD_API_KEY"])],
+    secrets=[modal.Secret.from_name(HUD_SECRET, required_keys=["HUD_API_KEY", "ANTHROPIC_API_KEY"])],
     timeout=3600,
     max_containers=1,
 )
@@ -143,7 +143,7 @@ def paired_benchmark(
 
 @app.function(
     image=image,
-    secrets=[modal.Secret.from_name(HUD_SECRET, required_keys=["HUD_API_KEY"])],
+    secrets=[modal.Secret.from_name(HUD_SECRET, required_keys=["HUD_API_KEY", "ANTHROPIC_API_KEY"])],
     timeout=3600,
     max_containers=1,
 )

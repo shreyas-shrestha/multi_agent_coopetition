@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dagboard Reference UI</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="canvas">
+      <section class="shell" aria-label="Lawtor dashboard reference">
+        <aside class="sidebar">
+          <div class="brand-row">
+            <div class="brand-mark">◆</div>
+            <div class="brand-name">LAWTOR</div>
+            <button class="collapse" aria-label="Collapse sidebar">«</button>
+          </div>
+
+          <label class="search">
+            <span>⌕</span>
+            <input value="Search here..." aria-label="Search" readonly />
+            <kbd>⌘ K</kbd>
+          </label>
+
+          <nav class="nav-list" aria-label="Primary">
+            <a class="active" href="#"><span>▦</span>Dashboard</a>
+            <a href="#"><span>◧</span>Documents</a>
+            <a href="#"><span>◨</span>Templates</a>
+            <a href="#"><span>♟</span>Clients</a>
+            <a href="#"><span>⌘</span>Workflows</a>
+            <a href="#"><span>▣</span>Analytics</a>
+            <a href="#"><span>◫</span>Archives</a>
+            <a href="#"><span>●</span>Change Log</a>
+          </nav>
+
+          <nav class="nav-list lower" aria-label="Support">
+            <a href="#"><span>?</span>Help Center</a>
+            <a href="#"><span>✦</span>AI Assistance</a>
+            <a href="#"><span>⚙</span>Setting</a>
+          </nav>
+
+          <section class="upgrade">
+            <h2><span>♛</span> Upgrade to premium</h2>
+            <p>Upgrade your account to premium to get more features</p>
+            <button>UPGRADE PLAN</button>
+          </section>
+        </aside>
+
+        <section class="main-panel">
+          <header class="topbar">
+            <p class="eyebrow">DASHBOARD</p>
+            <div class="profile-stack" aria-label="Team presence">
+              <span class="avatar a1"></span>
+              <span class="avatar a2"></span>
+              <span class="avatar a3"></span>
+              <span class="more">5+</span>
+            </div>
+          </header>
+
+          <section class="welcome">
+            <h1>Welcome Back, Karl 👋</h1>
+            <p>Let’s make legal work feel effortless today.</p>
+          </section>
+
+          <section class="metrics" aria-label="Summary metrics">
+            <article class="metric">
+              <h2><span>◧</span> ACTIVE DOCUMENTS</h2>
+              <div><strong>127</strong><em class="green">• In progress</em></div>
+              <p>across all teams</p>
+            </article>
+            <article class="metric">
+              <h2><span>✒</span> PENDING SIGNATURE</h2>
+              <div><strong>60</strong><em class="yellow">• Waiting</em></div>
+              <p>across all teams</p>
+            </article>
+            <article class="metric">
+              <h2><span>◒</span> TEMPLATE USED</h2>
+              <div><strong>12</strong><em class="blue">• Most used</em></div>
+              <p>Non-Disclosure Agreement</p>
+            </article>
+            <article class="metric">
+              <h2><span>♟</span> WORKFLOW</h2>
+              <div><strong>24</strong><em class="green">• In progress</em></div>
+              <p>Across 3 departments</p>
+            </article>
+          </section>
+
+          <section class="stats-card">
+            <div class="section-head">
+              <div>
+                <h2>Statistics Overview</h2>
+                <p>View all your statistics here</p>
+              </div>
+              <button>THIS WEEK⌄</button>
+            </div>
+
+            <div class="stats-grid">
+              <article class="activity">
+                <h3>◧ DOCUMENT ACTIVITY</h3>
+                <div class="bar-chart" aria-label="Document activity chart">
+                  <div class="row">
+                    <span>Drafted</span>
+                    <div class="bars drafted"></div>
+                  </div>
+                  <div class="row">
+                    <span>Signed</span>
+                    <div class="bars signed"></div>
+                  </div>
+                  <div class="row">
+                    <span>Pending</span>
+                    <div class="bars pending"></div>
+                  </div>
+                  <div class="axis"><i>0</i><i>10</i><i>20</i><i>30</i><i>40</i><i>50</i></div>
+                </div>
+              </article>
+
+              <article class="performance">
+                <h3>◧ WORKFLOW PERFORMANCE</h3>
+                <div class="performance-body">
+                  <div class="donut" aria-hidden="true"></div>
+                  <ul>
+                    <li><span class="swatch white"></span><p>NDA Flow</p><strong>5.4 DAYS</strong></li>
+                    <li><span class="swatch grey"></span><p>Employment Agreement</p><strong>2.8 DAYS</strong></li>
+                    <li><span class="swatch dim"></span><p>Vendor Onboarding</p><strong>3.1 DAYS</strong></li>
+                  </ul>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section class="queue">
+            <div class="queue-head">
+              <h2>Pending Signature Queue</h2>
+              <div>
+                <label class="table-search"><span>⌕</span><input value="Search here..." readonly /></label>
+                <button>≡ FILTER</button>
+              </div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>CLIENT</th>
+                  <th>DOCUMENT</th>
+                  <th>STATUS</th>
+                  <th>LAST UPDATED</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="mini-face f1"></span>Mauro Zilstra</td>
+                  <td>NDA Template</td>
+                  <td><span class="pill waiting">• Waiting</span></td>
+                  <td>Jan 5, 2025</td>
+                </tr>
+                <tr>
+                  <td><span class="mini-face f2"></span>Johan Haniko</td>
+                  <td>Service Agreement</td>
+                  <td><span class="pill signed">• Signed</span></td>
+                  <td>Jan 5, 2025</td>
+                </tr>
+                <tr>
+                  <td><span class="mini-face f3"></span>Mauro Zilstra</td>
+                  <td>NDA Template</td>
+                  <td><span class="pill waiting">• Waiting</span></td>
+                  <td>Jan 5, 2025</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+        </section>
+
+        <aside class="right-panel">
+          <button class="edge-pill" aria-label="Open panel"></button>
+
+          <section class="smart">
+            <h2>✦ WORK SMART</h2>
+            <div class="quick-actions">
+              <button><span>◧</span>Draft New<br />Document</button>
+              <button><span>♟</span>Invite Legal<br />Collaborator</button>
+            </div>
+          </section>
+
+          <section class="recent">
+            <h2>◧ RECENT ACTIVITY</h2>
+            <article>
+              <p>NDA Template sent for e-signature</p>
+              <span>▪ 5m ago</span>
+            </article>
+            <article>
+              <p>Master Service reviewed by Admin</p>
+              <span>▪ 1h ago</span>
+            </article>
+            <article>
+              <p>Invoice #2025 payment recorded</p>
+              <span>▪ 4h ago</span>
+            </article>
+            <article>
+              <p>Project Phoenix shared with Team</p>
+              <span>▪ Yesterday</span>
+            </article>
+            <article>
+              <p>Onboarding document finalized</p>
+              <span>▪ Last week</span>
+            </article>
+          </section>
+        </aside>
+      </section>
+    </main>
+  </body>
+</html>

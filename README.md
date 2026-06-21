@@ -6,7 +6,7 @@ Context Window Parliament, also called Attention Commons, trains agents to alloc
 
 The environment is not generic debate. It is an active attention-allocation task: the Speaker must decide who gets context-window space, how much to spend, which questions to ask, when to stop, and which testimony IDs support the final verdict.
 
-Specialists are deterministic but multi-turn. They are stateful environment functions whose responses depend on persona, private facts, question wording, token budget, revealed facts, prior turns, world difficulty, and seed. The same world can yield many trajectories because the Speaker controls ordering, questions, token amounts, and stopping time. This is like querying a deterministic database, compiler, or game environment.
+Specialists are LLM-prompted and multi-turn. They are stateful environment functions whose responses depend on persona, private facts, question wording, token budget, revealed facts, prior turns, world difficulty, and seed. The same world can yield many trajectories because the Speaker controls ordering, questions, token amounts, and stopping time. Hidden fact attribution is still validated deterministically so the reward model grades evidence, not prose vibes.
 
 ## Local Commands
 
@@ -60,6 +60,28 @@ hud sync tasks context-window-parliament-mvp tasks.py
 ```
 
 `HUD_API_KEY` is not required for tests or the local simulation. It is only needed for actual HUD platform evals, deploys, and syncs.
+
+### Anthropic Specialist LLMs
+
+When `ANTHROPIC_API_KEY` is present, specialist testimony uses Anthropic's Messages API with Claude Haiku 4.5 by default. Without the key, local tests and scripts fall back to the deterministic backend so development remains offline-friendly.
+
+PowerShell:
+
+```powershell
+$env:ANTHROPIC_API_KEY = "sk-ant-..."
+$env:PARLIAMENT_SPECIALIST_BACKEND = "llm"
+$env:PARLIAMENT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
+```
+
+Bash:
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+export PARLIAMENT_SPECIALIST_BACKEND="llm"
+export PARLIAMENT_ANTHROPIC_MODEL="claude-haiku-4-5-20251001"
+```
+
+`PARLIAMENT_SPECIALIST_BACKEND` accepts `auto`, `llm`, or `deterministic`; `auto` uses LLM specialists only when `ANTHROPIC_API_KEY` is set. Optional overrides are `ANTHROPIC_BASE_URL`, `ANTHROPIC_VERSION`, and `PARLIAMENT_ANTHROPIC_TIMEOUT`.
 
 ### HUD API Adjustments
 
@@ -160,7 +182,6 @@ tests/
 
 ## Future Expansion
 
-- LLM specialist backend with post-hoc fact attribution
 - nested HUD subagent rollouts
 - auctions for floor time
 - reputation over repeated hearings
@@ -178,7 +199,7 @@ local laptop.
 ```bash
 uv tool install modal
 modal setup
-modal secret create context-window-parliament-hud HUD_API_KEY="$HUD_API_KEY"
+modal secret create context-window-parliament-hud HUD_API_KEY="$HUD_API_KEY" ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
 modal deploy modal_benchmark.py
 modal run modal_benchmark.py --task-start 200 --task-count 30 --rollouts-per-task 2
 ```

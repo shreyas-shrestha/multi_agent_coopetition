@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from parliament.models import ToolCallLog, Verdict, World
-from parliament.specialists import DEFAULT_BACKEND, SpecialistBackend, apply_testimony_to_specialist
+from parliament.specialists import SpecialistBackend, apply_testimony_to_specialist, get_default_backend
 from parliament.state import get_world
 
 
@@ -80,7 +80,7 @@ def grant_floor(
     world_id: str,
     specialist_id: str,
     token_budget: int,
-    backend: SpecialistBackend = DEFAULT_BACKEND,
+    backend: SpecialistBackend | None = None,
 ) -> dict[str, Any]:
     """Grant floor time to a specialist, consuming official-record tokens."""
 
@@ -106,7 +106,8 @@ def grant_floor(
 
     before = len(world.official_record)
     specialist = world.specialists[specialist_id]
-    block = backend.generate_testimony(world, specialist, "floor", token_budget, None)
+    active_backend = backend or get_default_backend()
+    block = active_backend.generate_testimony(world, specialist, "floor", token_budget, None)
     world.official_record.append(block)
     world.interaction_count += 1
     apply_testimony_to_specialist(specialist, block, token_budget)
@@ -122,7 +123,7 @@ def cross_examine(
     specialist_id: str,
     question: str,
     token_budget: int,
-    backend: SpecialistBackend = DEFAULT_BACKEND,
+    backend: SpecialistBackend | None = None,
 ) -> dict[str, Any]:
     """Ask a targeted question, consuming official-record tokens."""
 
@@ -155,7 +156,8 @@ def cross_examine(
 
     before = len(world.official_record)
     specialist = world.specialists[specialist_id]
-    block = backend.generate_testimony(world, specialist, "cross_exam", token_budget, question)
+    active_backend = backend or get_default_backend()
+    block = active_backend.generate_testimony(world, specialist, "cross_exam", token_budget, question)
     world.official_record.append(block)
     world.interaction_count += 1
     apply_testimony_to_specialist(specialist, block, token_budget)

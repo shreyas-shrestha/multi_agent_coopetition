@@ -1,8 +1,13 @@
-"""Deterministic specialist testimony backends."""
+"""Specialist testimony backends."""
 
 from __future__ import annotations
 
-from typing import Literal, Protocol
+import json
+import os
+import re
+import urllib.error
+import urllib.request
+from typing import Any, Literal, Protocol
 
 from parliament.models import FactAtom, Specialist, SpecialistTurn, TestimonyBlock, World
 from parliament.parsing import extract_tags, token_count, trim_to_token_budget
@@ -20,6 +25,13 @@ class SpecialistBackend(Protocol):
         question: str | None = None,
     ) -> TestimonyBlock:
         """Generate a testimony block without mutating the official record."""
+
+
+class LLMClient(Protocol):
+    """Minimal text-generation client used by LLM-backed specialists."""
+
+    def complete(self, *, system: str, user: str, max_tokens: int) -> str:
+        """Return a text completion."""
 
 
 class DeterministicSpecialistBackend:
@@ -321,14 +333,17 @@ class DeterministicSpecialistBackend:
 
 
 class LLMSpecialistBackend:
-    """Future LLM-backed specialist backend.
+    """LLM-backed specialist backend with deterministic hidden attribution."""
 
-    A later version can give each specialist's private facts and persona to an LLM
-    subagent. The output would still need post-hoc fact attribution because the
-    deterministic scorer requires hidden fact IDs, clusters, and token attribution.
-    Nested HUD subagent rollouts could eventually replace these scripted specialists,
-    while preserving the same official-record and reward interfaces.
-    """
+    def __init__(
+        self,
+        client: LLMClient | None = None,
+        fallback_backend: SpecialistBackend | None = None,
+        fallback_on_error: bool = True,
+    ) -> None:
+        self.client = client or AnthropicMessagesClient.from_env()
+        self.fallback_backend = fallback_backend or DeterministicSpecialistBackend()
+        self.fallback_on_error = fallback_on_error
 
     def generate_testimony(
         self,
@@ -338,7 +353,356 @@ class LLMSpecialistBackend:
         token_budget: int,
         question: str | None = None,
     ) -> TestimonyBlock:
-        raise NotImplementedError("LLMSpecialistBackend is a documented stub for future work.")
+        question = question.strip() if question else None
+        if self._is_repeated_question(specialist, question):
+            return self.fallback_backend.generate_testimony(
+                world, specialist, mode, token_budget, question
+            )
+
+        try:
+            raw = self.client.complete(
+                system=_llm_system_prompt(),
+                user=_llm_user_prompt(world, specialist, mode, token_budget, question),
+                max_tokens=max(128, min(2048, token_budget * 3)),
+            )
+            payload = _parse_llm_payload(raw)
+            block = _block_from_llm_payload(
+                world=world,
+                specialist=specialist,
+                mode=mode,
+                token_budget=token_budget,
+                question=question,
+                payload=payload,
+            )
+        except Exception:
+            if not self.fallback_on_error:
+                raise
+            return self.fallback_backend.generate_testimony(
+                world, specialist, mode, token_budget, question
+            )
+
+        if block.visible_text and block.hidden_fact_ids:
+            return block
+        if self.fallback_on_error:
+            return self.fallback_backend.generate_testimony(
+                world, specialist, mode, token_budget, question
+            )
+        return block
+
+    @staticmethod
+    def _is_repeated_question(specialist: Specialist, question: str | None) -> bool:
+        return bool(
+            question
+            and any(
+                turn.question and turn.question.lower() == question.lower()
+                for turn in specialist.previous_turns
+            )
+        )
+
+
+class AnthropicMessagesClient:
+    """Small stdlib client for Anthropic's Messages API."""
+
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model: str = "claude-haiku-4-5-20251001",
+        base_url: str = "https://api.anthropic.com",
+        anthropic_version: str = "2023-06-01",
+        timeout: float = 60.0,
+    ) -> None:
+        if not api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY is required for LLM specialists.")
+        self.api_key = api_key
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.anthropic_version = anthropic_version
+        self.timeout = timeout
+
+    @classmethod
+    def from_env(cls) -> AnthropicMessagesClient:
+        return cls(
+            api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
+            model=os.environ.get("PARLIAMENT_ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
+            base_url=os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
+            anthropic_version=os.environ.get("ANTHROPIC_VERSION", "2023-06-01"),
+            timeout=float(os.environ.get("PARLIAMENT_ANTHROPIC_TIMEOUT", "60")),
+        )
+
+    def complete(self, *, system: str, user: str, max_tokens: int) -> str:
+        body = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "system": system,
+            "messages": [{"role": "user", "content": user}],
+        }
+        request = urllib.request.Request(
+            f"{self.base_url}/v1/messages",
+            data=json.dumps(body).encode("utf-8"),
+            headers={
+                "anthropic-version": self.anthropic_version,
+                "content-type": "application/json",
+                "x-api-key": self.api_key,
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"Anthropic Messages API error {exc.code}: {detail}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Anthropic Messages API request failed: {exc}") from exc
+
+        content = data.get("content", [])
+        parts = [
+            str(part.get("text", ""))
+            for part in content
+            if isinstance(part, dict) and part.get("type") == "text"
+        ]
+        text = "\n".join(part for part in parts if part).strip()
+        if not text:
+            raise RuntimeError("Anthropic Messages API returned no text content.")
+        return text
+
+
+def _llm_system_prompt() -> str:
+    return (
+        "You are a private expert witness inside a context-window parliament environment. "
+        "Answer only as the named specialist, using only the private facts supplied in the "
+        "user message and your persona instructions. Return exactly one JSON object with keys "
+        "visible_text and fact_ids. visible_text is the public testimony the Speaker sees. "
+        "fact_ids is a private list of supplied fact IDs that directly support visible_text. "
+        "Never put fact IDs in visible_text. Do not invent facts, measurements, citations, "
+        "decision options, or root causes that are not supplied."
+    )
+
+
+def _llm_user_prompt(
+    world: World,
+    specialist: Specialist,
+    mode: Literal["floor", "cross_exam"],
+    token_budget: int,
+    question: str | None,
+) -> str:
+    facts = [
+        {
+            "id": fid,
+            "kind": world.facts[fid].kind,
+            "text": world.facts[fid].text,
+        }
+        for fid in specialist.private_fact_ids
+    ]
+    prior_turns = [
+        {
+            "mode": turn.mode,
+            "question": turn.question,
+            "visible_text": turn.visible_text,
+            "revealed_fact_ids": turn.revealed_fact_ids,
+        }
+        for turn in specialist.previous_turns
+    ]
+    payload = {
+        "world_id": world.world_id,
+        "domain": world.domain,
+        "mode": mode,
+        "question": question,
+        "token_budget": token_budget,
+        "specialist": {
+            "name": specialist.name,
+            "role": specialist.role,
+            "persona_policy": specialist.persona_policy,
+            "public_bid": specialist.public_bid,
+            "claimed_priority": specialist.claimed_priority,
+            "requested_tokens": specialist.requested_tokens,
+            "bias_target": specialist.bias_target,
+            "verbosity": specialist.verbosity,
+            "reliability": specialist.reliability,
+        },
+        "prior_turns": prior_turns,
+        "private_facts": facts,
+        "output_contract": {
+            "visible_text": f"At most {token_budget} approximate tokens. No fact IDs.",
+            "fact_ids": "Only IDs from private_facts that directly support visible_text.",
+        },
+    }
+    return json.dumps(payload, sort_keys=True)
+
+
+def _parse_llm_payload(raw: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        decoder = json.JSONDecoder()
+        parsed = None
+        for index, char in enumerate(raw):
+            if char != "{":
+                continue
+            try:
+                candidate, _end = decoder.raw_decode(raw[index:])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(candidate, dict):
+                parsed = candidate
+        if parsed is None:
+            raise ValueError("LLM specialist response did not contain a JSON object.")
+    if not isinstance(parsed, dict):
+        raise ValueError("LLM specialist response must be a JSON object.")
+    return parsed
+
+
+def _block_from_llm_payload(
+    *,
+    world: World,
+    specialist: Specialist,
+    mode: Literal["floor", "cross_exam"],
+    token_budget: int,
+    question: str | None,
+    payload: dict[str, Any],
+) -> TestimonyBlock:
+    visible_text = _strip_fact_ids(str(payload.get("visible_text", "")), world)
+    visible_text = trim_to_token_budget(visible_text, token_budget)
+    actual = token_count(visible_text)
+    fact_ids = _valid_attributed_fact_ids(payload, world, specialist, visible_text)
+    token_buckets = _token_buckets_for_facts(world, fact_ids, actual)
+    duplicate_tokens = _duplicate_tokens_for_facts(world, specialist, fact_ids, actual)
+    root_cause_tags: set[str] = set()
+    for fid in fact_ids:
+        root_cause_tags |= world.facts[fid].root_cause_tags
+
+    return TestimonyBlock(
+        id=world.next_testimony_id(),
+        specialist_id=specialist.id,
+        mode=mode,
+        question=question,
+        visible_text=visible_text,
+        token_count=actual,
+        hidden_fact_ids=fact_ids,
+        hidden_cluster_ids=[world.facts[fid].cluster_id for fid in fact_ids],
+        relevant_tokens=token_buckets["relevant"],
+        decoy_tokens=token_buckets["decoy"],
+        fluff_tokens=token_buckets["fluff"],
+        duplicate_tokens=duplicate_tokens,
+        root_cause_tags=root_cause_tags,
+    )
+
+
+def _strip_fact_ids(text: str, world: World) -> str:
+    cleaned = text
+    for fact_id in sorted(world.facts, key=len, reverse=True):
+        cleaned = re.sub(
+            rf"(?<![A-Za-z0-9_]){re.escape(fact_id)}(?![A-Za-z0-9_])",
+            "",
+            cleaned,
+        )
+    return re.sub(r"\s{2,}", " ", cleaned).strip()
+
+
+def _valid_attributed_fact_ids(
+    payload: dict[str, Any],
+    world: World,
+    specialist: Specialist,
+    visible_text: str,
+) -> list[str]:
+    supplied = payload.get("fact_ids", [])
+    if not isinstance(supplied, list):
+        supplied = []
+    private = set(specialist.private_fact_ids)
+    valid: list[str] = []
+    for item in supplied:
+        fact_id = str(item)
+        if fact_id not in private or fact_id not in world.facts or fact_id in valid:
+            continue
+        if _fact_supported_by_visible_text(world.facts[fact_id], visible_text):
+            valid.append(fact_id)
+    return valid
+
+
+def _fact_supported_by_visible_text(fact: FactAtom, visible_text: str) -> bool:
+    if not visible_text:
+        return False
+    lowered = visible_text.lower()
+    if fact.text.lower() in lowered or fact.short_text.lower() in lowered:
+        return True
+    markers = [
+        marker.lower()
+        for marker in fact.leak_guard_phrases
+        if marker and marker != fact.id
+    ]
+    if markers and any(marker in lowered for marker in markers):
+        return True
+    visible_tags = extract_tags(visible_text)
+    overlap = visible_tags & fact.tags
+    return len(overlap) >= min(4, max(2, len(fact.tags) // 4))
+
+
+def _token_buckets_for_facts(world: World, fact_ids: list[str], actual: int) -> dict[str, int]:
+    if actual <= 0:
+        return {"relevant": 0, "decoy": 0, "fluff": 0}
+    if not fact_ids:
+        return {"relevant": 0, "decoy": 0, "fluff": actual}
+
+    weights = [max(1, world.facts[fid].token_value_hint) for fid in fact_ids]
+    total_weight = sum(weights)
+    assigned = 0
+    buckets = {"relevant": 0, "decoy": 0, "fluff": 0}
+    for index, (fid, weight) in enumerate(zip(fact_ids, weights)):
+        if index == len(fact_ids) - 1:
+            share = actual - assigned
+        else:
+            share = round(actual * weight / total_weight)
+            assigned += share
+        fact = world.facts[fid]
+        if fact.kind in {"required", "supporting"}:
+            buckets["relevant"] += share
+        elif fact.kind == "decoy":
+            buckets["decoy"] += share
+        else:
+            buckets["fluff"] += share
+    return buckets
+
+
+def _duplicate_tokens_for_facts(
+    world: World,
+    specialist: Specialist,
+    fact_ids: list[str],
+    actual: int,
+) -> int:
+    if actual <= 0 or not fact_ids:
+        return 0
+    duplicate_count = sum(
+        1
+        for fid in fact_ids
+        if fid in specialist.revealed_fact_ids
+        or DeterministicSpecialistBackend._cluster_seen(world, world.facts[fid].cluster_id)
+    )
+    return round(actual * duplicate_count / len(fact_ids))
+
+
+_DEFAULT_BACKEND: SpecialistBackend | None = None
+
+
+def get_default_backend() -> SpecialistBackend:
+    """Return the configured specialist backend."""
+
+    global _DEFAULT_BACKEND
+    if _DEFAULT_BACKEND is not None:
+        return _DEFAULT_BACKEND
+
+    backend = os.environ.get("PARLIAMENT_SPECIALIST_BACKEND", "auto").lower()
+    if backend == "deterministic":
+        _DEFAULT_BACKEND = DeterministicSpecialistBackend()
+    elif backend == "llm" or (backend == "auto" and os.environ.get("ANTHROPIC_API_KEY")):
+        _DEFAULT_BACKEND = LLMSpecialistBackend()
+    elif backend == "auto":
+        _DEFAULT_BACKEND = DeterministicSpecialistBackend()
+    else:
+        raise RuntimeError(
+            "PARLIAMENT_SPECIALIST_BACKEND must be one of: auto, deterministic, llm."
+        )
+    return _DEFAULT_BACKEND
 
 
 DEFAULT_BACKEND = DeterministicSpecialistBackend()
@@ -358,4 +722,3 @@ def apply_testimony_to_specialist(specialist: Specialist, block: TestimonyBlock,
             visible_text=block.visible_text,
         )
     )
-
