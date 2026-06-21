@@ -14,32 +14,21 @@ Run `npm run build` before shipping. The default hearing is `incident-response-m
 
 ## Deploy to Vercel
 
-### Option A — repo root (simplest)
-
-1. Import the repository in Vercel.
-2. Leave **Root Directory** empty (repository root).
-3. In **Project Settings → Build & Development Settings**, clear any custom **Install Command** and **Build Command** overrides so the repo-root `vercel.json` is used:
-   - Install: `npm ci --prefix showcase`
-   - Build: `npm run build --prefix showcase`
-4. **Framework Preset:** Next.js.
-
-### Option B — app subdirectory
-
-1. Set **Root Directory** to `showcase/app`.
-2. Clear install/build overrides so `showcase/app/vercel.json` applies:
+1. Import `github.com/shreyas-shrestha/multi_agent_coopetition`.
+2. **Settings → General → Root Directory** → set to **`showcase/app`** and save.
+3. **Settings → Build & Development Settings** → turn **off** any overrides for Install Command, Build Command, and Output Directory. `showcase/app/vercel.json` owns those values:
    - Install: `cd .. && npm ci`
    - Build: `npm run build`
+   - Framework: Next.js
+4. Enable **Include source files outside of the Root Directory** (same General / Root Directory section) so the workspace install in `showcase/` works.
+5. Redeploy. No environment variables are needed for the replay-only showcase.
 
-**Do not** combine Root Directory `showcase/app` with Install Command `npm ci --prefix showcase` — that path is wrong and causes the `EUSAGE` / missing lockfile error.
-
-Sync your fork to latest `main` before redeploying. No environment variables are needed for the replay-only showcase.
-
-For a CLI deployment:
+For CLI deploy from the app directory:
 
 ```bash
+cd showcase/app
 npx vercel
 npx vercel --prod
 ```
 
-When the live Modal endpoint is connected later, add its public URL as a Vercel environment variable
-and keep `HUD_API_KEY` and `ANTHROPIC_API_KEY` only in Modal secrets.
+When the live Modal endpoint is connected later, add its public URL as a Vercel environment variable and keep `HUD_API_KEY` and `ANTHROPIC_API_KEY` only in Modal secrets.
